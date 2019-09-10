@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"image/color"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/lucasb-eyer/go-colorful"
-
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 type wifineopixel struct {
@@ -89,7 +88,7 @@ func (w *wifineopixel) clear() error {
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-	log.Printf("clear: %v", string(body))
+	log.Debug().Msgf("clear: %v", string(body))
 	w.state, err = w.getStates()
 	if err != nil {
 		return err
@@ -107,24 +106,27 @@ func (w *wifineopixel) on() error {
 	if err != nil {
 		return err
 	}
+	log.Debug().Str("body", b.String()).Msg("sending body")
 	resp, err := w.hc.Post(w.address.String()+"/raw", "application/json", b)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-	log.Printf("on: %v", string(body))
-	return nil
+	log.Debug().Str("body", string(body)).Msg("on")
+	w.state, err = w.getStates()
+	if w.isOn() {
+		w.onState = w.state
+	}
+	return err
 }
 
 func (w *wifineopixel) setState(state []colorful.Color) error {
 	if w.hc == nil {
 		w.hc = http.DefaultClient
 	}
-	if _, _, v := state[0].Hsv(); v > 0 {
+	if _, _, v := state[0].Hsv(); v > 0 && w.isOn() {
 		w.onState = w.state
-	} else {
-		w.onState = state
 	}
 	w.state = state
 
@@ -139,11 +141,12 @@ func (w *wifineopixel) setState(state []colorful.Color) error {
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-	log.Printf("setState: %v", string(body))
+	log.Debug().Msgf("setState: %v", string(body))
 	return nil
 }
 
 func (w *wifineopixel) setSolid(c colorful.Color) error {
+	log.Debug().Msgf("setSolid(%v)", c)
 	s := make([]colorful.Color, len(w.onState))
 	for i := range s {
 		s[i] = c
@@ -199,11 +202,13 @@ func (w *wifineopixel) getStates() ([]colorful.Color, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debug().Msgf("GET /states = %v", states)
 
 	c := make([]colorful.Color, len(states))
 	for i, s := range states {
 		c[i] = uint32ToColor(s)
 	}
+	log.Debug().Msgf("uint32ToColor(%v) = %v", states[0], c[0])
 
 	return c, nil
 }
@@ -233,11 +238,17 @@ func colorsToUint32(c []colorful.Color) []uint32 {
 }
 
 func uint32ToColor(u uint32) colorful.Color {
-	return colorful.Color{
-		R: float64((uint8(u>>16) & 255) / 255),
-		G: float64((uint8(u>>8) & 255) / 255),
-		B: float64((uint8(u>>0) & 255) / 255),
+	rgba := color.RGBA{
+		uint8(u>>16) & 255,
+		uint8(u>>8) & 255,
+		uint8(u>>0) & 255,
+		// force Alpha to full
+		255,
+		// uint8(u>>24) & 255,
 	}
+	// log.Debug().Msgf("uint32ToColor(%v) = rgba %v", u, rgba)
+	c, _ := colorful.MakeColor(rgba)
+	return c
 }
 
 func parseHex(in string) (color.RGBA, error) {
