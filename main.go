@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"strings"
 	"time"
 
+	"github.com/hashicorp/mdns"
 	"github.com/lucasb-eyer/go-colorful"
 
 	"github.com/brutella/hc"
@@ -16,6 +18,7 @@ import (
 var (
 	strip       *wifineopixel
 	storagePath string
+	hostURL     string
 )
 
 func init() {
@@ -25,6 +28,7 @@ func init() {
 	)
 	flag.StringVar(&storagePath, "path", defaultPath, usage)
 	flag.StringVar(&storagePath, "p", defaultPath, usage+" (shorthand)")
+	flag.StringVar(&hostURL, "host", "", "host URL for wifi neopixel device")
 }
 
 func main() {
@@ -32,8 +36,39 @@ func main() {
 
 	initLogger()
 
+	// lookup wifi neopixel by mDNS
+	if hostURL == "" {
+		// Make a channel for results and start listening
+		entriesCh := make(chan *mdns.ServiceEntry, 4)
+		go func() {
+			for entry := range entriesCh {
+				if strings.HasSuffix(entry.Name, "_neopixel._tcp.local.") {
+					log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
+					hostURL = "http://" + entry.Addr.String()
+				}
+			}
+		}()
+
+		// Start the lookup
+		opts := &mdns.QueryParam{
+			Timeout:             5 * time.Second,
+			Domain:              "local",
+			Service:             "_neopixel._tcp",
+			Entries:             entriesCh,
+			WantUnicastResponse: true,
+		}
+		err := mdns.Query(opts)
+		if err != nil {
+			log.Fatal().Err(err).Msg("")
+		}
+		close(entriesCh)
+		if hostURL == "" {
+			log.Fatal().Msg("neopixel not found")
+		}
+	}
+
 	var err error
-	strip, err = newWifiNeopixel("http://10.0.1.141")
+	strip, err = newWifiNeopixel(hostURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
