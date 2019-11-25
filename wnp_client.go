@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image/color"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -14,6 +16,10 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+
+	"github.com/opentracing-contrib/go-stdlib/nethttp"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 )
 
 type wifineopixel struct {
@@ -23,23 +29,30 @@ type wifineopixel struct {
 	onState []colorful.Color
 }
 
-func newWifiNeopixel(addr string) (*wifineopixel, error) {
+func newWifiNeopixel(ctx context.Context, addr string) (*wifineopixel, error) {
 	u, err := url.Parse(addr)
 	if err != nil {
 		return nil, err
 	}
+	client := &http.Client{
+		Transport: instrumentHTTPClient("wnp_client", &nethttp.Transport{}),
+	}
 	strip = &wifineopixel{
 		address: u,
+		hc:      client,
 	}
-	err = strip.initState()
+	err = strip.initState(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return strip, nil
 }
 
-func (w *wifineopixel) initState() (err error) {
-	w.state, err = w.getStates()
+func (w *wifineopixel) initState(ctx context.Context) (err error) {
+	span, ctx := createSpan(ctx, "initState")
+	defer span.Finish()
+
+	w.state, err = w.getStates(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,11 +69,43 @@ func (w *wifineopixel) initState() (err error) {
 	return nil
 }
 
-func (w *wifineopixel) numPixels() (int, error) {
-	if w.hc == nil {
-		w.hc = http.DefaultClient
+func (w *wifineopixel) get(ctx context.Context, path string) (*http.Response, error) {
+	return w.do(ctx, "GET", path, "", nil)
+}
+
+func (w *wifineopixel) post(ctx context.Context, path, contentType string, body io.Reader) (*http.Response, error) {
+	return w.do(ctx, "POST", path, contentType, body)
+}
+
+func (w *wifineopixel) do(ctx context.Context, method, path, contentType string, body io.Reader) (*http.Response, error) {
+	tracer := opentracing.GlobalTracer()
+	req, err := http.NewRequestWithContext(ctx, method, w.address.String()+path, body)
+	if err != nil {
+		return nil, err
 	}
-	resp, err := w.hc.Get(w.address.String() + "/size")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	req, ht := nethttp.TraceRequest(tracer, req,
+		nethttp.OperationName(req.Proto+" "+req.Method+" "+req.URL.String()))
+	defer ht.Finish()
+	res, err := w.hc.Do(req)
+	span := ht.Span()
+	if span != nil {
+		tagsFromRequest(span, req)
+		tagsFromResponse(span, res)
+		if err != nil {
+			ext.Error.Set(span, true)
+		}
+	}
+	return res, err
+}
+
+func (w *wifineopixel) numPixels(ctx context.Context) (int, error) {
+	span, ctx := createSpan(ctx, "numPixels")
+	defer span.Finish()
+
+	resp, err := w.get(ctx, "/size")
 	if err != nil {
 		return 0, err
 	}
@@ -78,53 +123,63 @@ func (w *wifineopixel) numPixels() (int, error) {
 	return int(n), nil
 }
 
-func (w *wifineopixel) clear() error {
-	if w.hc == nil {
-		w.hc = http.DefaultClient
+func (w *wifineopixel) clear(ctx context.Context) error {
+	span, ctx := createSpan(ctx, "clear")
+	defer span.Finish()
+
+	resp, err := w.get(ctx, "/clear")
+	if err != nil {
+		resp.Body.Close()
+		return err
 	}
-	resp, err := w.hc.Get(w.address.String() + "/clear")
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
 	log.Debug().Msgf("clear: %v", string(body))
-	w.state, err = w.getStates()
+	w.state, err = w.getStates(ctx)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (w *wifineopixel) on() error {
-	if w.hc == nil {
-		w.hc = http.DefaultClient
-	}
+func (w *wifineopixel) on(ctx context.Context) error {
+	span, ctx := createSpan(ctx, "on")
+	defer span.Finish()
 
 	b := &bytes.Buffer{}
 	err := json.NewEncoder(b).Encode(colorsToUint32(w.onState))
 	if err != nil {
 		return err
 	}
+	span.SetTag("body", b)
+
 	log.Debug().Str("body", b.String()).Msg("sending body")
-	resp, err := w.hc.Post(w.address.String()+"/raw", "application/json", b)
+	resp, err := w.post(ctx, "/raw", "application/json", b)
+	if err != nil {
+		resp.Body.Close()
+		return err
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
 	log.Debug().Str("body", string(body)).Msg("on")
-	w.state, err = w.getStates()
+	w.state, err = w.getStates(ctx)
 	if w.isOn() {
 		w.onState = w.state
 	}
 	return err
 }
 
-func (w *wifineopixel) setState(state []colorful.Color) error {
-	if w.hc == nil {
-		w.hc = http.DefaultClient
-	}
+func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) error {
+	span, ctx := createSpan(ctx, "setState")
+	defer span.Finish()
+	span.SetTag("state", state)
+
 	if _, _, v := state[0].Hsv(); v > 0 && w.isOn() {
 		w.onState = w.state
 	}
@@ -135,7 +190,9 @@ func (w *wifineopixel) setState(state []colorful.Color) error {
 	if err != nil {
 		return err
 	}
-	resp, err := w.hc.Post(w.address.String()+"/raw", "application/json", b)
+	span.SetTag("body", b)
+
+	resp, err := w.post(ctx, "/raw", "application/json", b)
 	if err != nil {
 		return err
 	}
@@ -145,13 +202,16 @@ func (w *wifineopixel) setState(state []colorful.Color) error {
 	return nil
 }
 
-func (w *wifineopixel) setSolid(c colorful.Color) error {
+func (w *wifineopixel) setSolid(ctx context.Context, c colorful.Color) error {
+	span, ctx := createSpan(ctx, "setSolid")
+	defer span.Finish()
+
 	log.Debug().Msgf("setSolid(%v)", c)
 	s := make([]colorful.Color, len(w.onState))
 	for i := range s {
 		s[i] = c
 	}
-	return w.setState(s)
+	return w.setState(ctx, s)
 }
 
 func (w *wifineopixel) isOff() bool {
@@ -174,8 +234,11 @@ func (w *wifineopixel) isOn() bool {
 	return false
 }
 
-func (w *wifineopixel) hsv() (h, s, v float64, err error) {
-	c, err := strip.getState(0)
+func (w *wifineopixel) hsv(ctx context.Context) (h, s, v float64, err error) {
+	span, ctx := createSpan(ctx, "hsv")
+	defer span.Finish()
+
+	c, err := strip.getState(ctx, 0)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -183,11 +246,11 @@ func (w *wifineopixel) hsv() (h, s, v float64, err error) {
 	return h, s, v, nil
 }
 
-func (w *wifineopixel) getStates() ([]colorful.Color, error) {
-	if w.hc == nil {
-		w.hc = http.DefaultClient
-	}
-	resp, err := w.hc.Get(w.address.String() + "/states")
+func (w *wifineopixel) getStates(ctx context.Context) ([]colorful.Color, error) {
+	span, ctx := createSpan(ctx, "getStates")
+	defer span.Finish()
+
+	resp, err := w.get(ctx, "/states")
 	if err != nil {
 		return nil, err
 	}
@@ -213,8 +276,11 @@ func (w *wifineopixel) getStates() ([]colorful.Color, error) {
 	return c, nil
 }
 
-func (w *wifineopixel) getState(pixel int) (state colorful.Color, err error) {
-	w.state, err = w.getStates()
+func (w *wifineopixel) getState(ctx context.Context, pixel int) (state colorful.Color, err error) {
+	span, ctx := createSpan(ctx, "getState")
+	defer span.Finish()
+
+	w.state, err = w.getStates(ctx)
 	if err != nil {
 		return colorful.Color{}, err
 	}

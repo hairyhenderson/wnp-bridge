@@ -30,3 +30,15 @@ func initLogger() {
 	// Hook up HC's logging to zerolog
 	hclog.Info.SetOutput(log.Logger)
 }
+
+// an adapter for logging from Jaeger to zerolog
+type jlogger struct {
+}
+
+func (jlogger) Error(e string) {
+	log.Error().Msg(e)
+}
+
+func (jlogger) Infof(msg string, args ...interface{}) {
+	log.Debug().Msgf(msg, args...)
+}
