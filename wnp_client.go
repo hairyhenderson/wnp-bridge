@@ -255,13 +255,13 @@ func (w *wifineopixel) getStates(ctx context.Context) ([]colorful.Color, error) 
 		return nil, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	readSpan, ctx := createSpan(ctx, "getStates.readStates")
+	defer readSpan.Finish()
 
 	states := []uint32{}
-	err = json.Unmarshal(body, &states)
+	d := json.NewDecoder(resp.Body)
+	err = d.Decode(&states)
+	resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
