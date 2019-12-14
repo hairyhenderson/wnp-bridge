@@ -266,6 +266,11 @@ func initTracing(name string) (io.Closer, error) {
 		},
 	}
 
+	_, err := cfg.FromEnv()
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize tracer with a logger and a metrics factory
 	tracer, closer, err := cfg.NewTracer(
 		jaegercfg.Logger(jlogger{}),
