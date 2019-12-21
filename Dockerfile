@@ -4,7 +4,7 @@ WORKDIR /src/wnp-bridge
 COPY . .
 RUN CGOENABLED=0 go build -o /bin/wnp-bridge
 
-FROM alpine:3.10.3 AS runtime
+FROM alpine:3.11.0 AS runtime
 
 COPY --from=build /bin/wnp-bridge /bin/wnp-bridge
 
