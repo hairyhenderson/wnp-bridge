@@ -3,7 +3,7 @@ module github.com/hairyhenderson/wnp-bridge
 go 1.13
 
 require (
-	github.com/brutella/hc v1.2.0
+	github.com/brutella/hc v1.2.1
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/hashicorp/mdns v1.0.3
 	github.com/lucasb-eyer/go-colorful v1.0.3
@@ -17,5 +17,4 @@ require (
 	go.uber.org/atomic v1.5.1 // indirect
 	golang.org/x/crypto v0.0.0-20200221170553-0f24fbd83dfb
 	golang.org/x/net v0.0.0-20191119073136-fc4aabc6c914 // indirect
-	golang.org/x/text v0.3.2 // indirect
 )
