@@ -110,7 +110,7 @@ func main() {
 		Manufacturer: "Dave Henderson",
 	}
 
-	acc := accessory.NewLightbulb(info)
+	acc := accessory.NewColoredLightbulb(info)
 	lb := acc.Lightbulb
 
 	initLight(ctx, lb, strip)
@@ -238,7 +238,7 @@ func main() {
 }
 
 // initialize the HomeControl lightbulb service with the same values currently displaying on the WNP strip
-func initLight(ctx context.Context, lb *service.Lightbulb, strip *wifineopixel) {
+func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) {
 	span, ctx := createSpan(ctx, "initLight")
 	defer span.Finish()
 
