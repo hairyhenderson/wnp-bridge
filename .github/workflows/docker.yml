@@ -4,8 +4,10 @@ on: [push]
 jobs:
   docker-build:
     runs-on: ubuntu-latest
+    container:
+      image: hairyhenderson/gomplate-ci-build:latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v1
     - name: Make Docker images
       run: docker build .
       env:
