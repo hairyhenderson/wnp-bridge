@@ -4,17 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"image/color"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 
 	"github.com/lucasb-eyer/go-colorful"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/opentracing-contrib/go-stdlib/nethttp"
@@ -101,28 +97,6 @@ func (w *wifineopixel) do(ctx context.Context, method, path, contentType string,
 	return res, err
 }
 
-func (w *wifineopixel) numPixels(ctx context.Context) (int, error) {
-	span, ctx := createSpan(ctx, "numPixels")
-	defer span.Finish()
-
-	resp, err := w.get(ctx, "/size")
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
-	}
-	s := strings.TrimSpace(string(body))
-	n, err := strconv.ParseInt(s, 0, 32)
-	if err != nil {
-		return 0, err
-	}
-	return int(n), nil
-}
-
 func (w *wifineopixel) clear(ctx context.Context) error {
 	span, ctx := createSpan(ctx, "clear")
 	defer span.Finish()
@@ -199,7 +173,7 @@ func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) err
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	log.Debug().Msgf("setState: %v", string(body))
-	return nil
+	return err
 }
 
 func (w *wifineopixel) setSolid(ctx context.Context, c colorful.Color) error {
@@ -255,7 +229,7 @@ func (w *wifineopixel) getStates(ctx context.Context) ([]colorful.Color, error) 
 		return nil, err
 	}
 
-	readSpan, ctx := createSpan(ctx, "getStates.readStates")
+	readSpan, _ := createSpan(ctx, "getStates.readStates")
 	defer readSpan.Finish()
 
 	states := []uint32{}
@@ -312,22 +286,6 @@ func uint32ToColor(u uint32) colorful.Color {
 		255,
 		// uint8(u>>24) & 255,
 	}
-	// log.Debug().Msgf("uint32ToColor(%v) = rgba %v", u, rgba)
 	c, _ := colorful.MakeColor(rgba)
 	return c
-}
-
-func parseHex(in string) (color.RGBA, error) {
-	s := strings.TrimSpace(in)
-	format := "%02x%02x%02x"
-	var r, g, b uint8
-	n, err := fmt.Sscanf(s, format, &r, &g, &b)
-	if err != nil {
-		return color.RGBA{}, err
-	}
-	if n != 3 {
-		return color.RGBA{}, errors.Errorf("parseHex: %v is not a valid RGB Hex colour", s)
-	}
-
-	return color.RGBA{R: r, G: g, B: b, A: 0xff}, nil
 }

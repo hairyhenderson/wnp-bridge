@@ -185,10 +185,14 @@ func main() {
 
 		start := time.Now()
 		log.Debug().Bool("on", on).Msg("lb.On.OnValueRemoteUpdate")
+		var err error
 		if on {
-			strip.on(ctx)
+			err = strip.on(ctx)
 		} else {
-			strip.clear(ctx)
+			err = strip.clear(ctx)
+		}
+		if err != nil {
+			log.Error().Err(err).Bool("on", on).Msg("error during lb.On.OnValueRemoteUpdate")
 		}
 		lb.On.SetValue(on)
 		observeUpdateDuration("on", "remoteUpdate", start)
@@ -200,23 +204,36 @@ func main() {
 
 		start := time.Now()
 		log.Debug().Msg("acc.OnIdentify()")
+		var err error
 		initialOn := strip.isOn()
 		if !initialOn {
-			strip.on(ctx)
+			err = strip.on(ctx)
+			if err != nil {
+				log.Error().Err(err).Bool("initialOn", initialOn).Msg("error during acc.OnIdentify")
+				return
+			}
 			time.Sleep(500 * time.Millisecond)
 		}
-		strip.clear(ctx)
-		time.Sleep(500 * time.Millisecond)
-		strip.on(ctx)
-		time.Sleep(500 * time.Millisecond)
-		strip.clear(ctx)
-		time.Sleep(500 * time.Millisecond)
-		strip.on(ctx)
-		time.Sleep(500 * time.Millisecond)
-		strip.clear(ctx)
+		for i := 0; i < 4; i++ {
+			if i%2 == 0 {
+				err = strip.clear(ctx)
+			} else {
+				err = strip.on(ctx)
+			}
+			if err != nil {
+				log.Error().Err(err).Bool("initialOn", initialOn).Int("i", i).Msg("error during acc.OnIdentify blinking")
+				return
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+
 		if initialOn {
 			time.Sleep(500 * time.Millisecond)
-			strip.on(ctx)
+			err = strip.on(ctx)
+			if err != nil {
+				log.Error().Err(err).Bool("initialOn", initialOn).Msg("error during acc.OnIdentify")
+				return
+			}
 		}
 		observeUpdateDuration("acc", "identify", start)
 	})
