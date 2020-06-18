@@ -12,7 +12,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.7.0
 	github.com/rs/zerolog v1.19.0
-	github.com/uber/jaeger-client-go v2.23.1+incompatible
+	github.com/uber/jaeger-client-go v2.24.0+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible
 	go.uber.org/atomic v1.6.0 // indirect
 	golang.org/x/crypto v0.0.0-20200406173513-056763e48d71
