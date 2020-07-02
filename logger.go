@@ -1,16 +1,16 @@
 package main
 
 import (
+	"context"
 	stdlog "log"
 	"os"
 
-	hclog "github.com/brutella/hc/log"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-func initLogger() {
+func initLogger(ctx context.Context) (context.Context, zerolog.Logger) {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	stdlogger := log.With().Bool("stdlog", true).Logger()
@@ -27,18 +27,6 @@ func initLogger() {
 		stdlogger = stdlogger.Output(noLevelWriter)
 		stdlog.SetOutput(stdlogger)
 	}
-	// Hook up HC's logging to zerolog
-	hclog.Info.SetOutput(log.Logger)
-}
 
-// an adapter for logging from Jaeger to zerolog
-type jlogger struct {
-}
-
-func (jlogger) Error(e string) {
-	log.Error().Msg(e)
-}
-
-func (jlogger) Infof(msg string, args ...interface{}) {
-	log.Debug().Msgf(msg, args...)
+	return ctx, log.Logger
 }
