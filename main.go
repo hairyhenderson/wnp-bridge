@@ -3,23 +3,22 @@ package main
 import (
 	"context"
 	"flag"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/honeycombio/opentelemetry-exporter-go/honeycomb"
+	"go.opentelemetry.io/otel/exporters/trace/stdout"
+	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
+
 	"github.com/hashicorp/mdns"
 	"github.com/lucasb-eyer/go-colorful"
 
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/uber/jaeger-client-go"
-	jaegercfg "github.com/uber/jaeger-client-go/config"
-	jaegerprom "github.com/uber/jaeger-lib/metrics/prometheus"
 
 	"github.com/brutella/hc"
 	"github.com/brutella/hc/accessory"
+	hclog "github.com/brutella/hc/log"
 	"github.com/brutella/hc/service"
 
 	"github.com/rs/zerolog/log"
@@ -31,6 +30,8 @@ var (
 	hostURL     string
 	setupCode   string
 	accName     string
+	honeyKey    string
+	honeyDS     string
 )
 
 func init() {
@@ -43,12 +44,18 @@ func init() {
 	flag.StringVar(&hostURL, "host", "", "host URL for wifi neopixel device")
 	flag.StringVar(&setupCode, "code", "12344321", "setup code")
 	flag.StringVar(&accName, "name", "WiFi NeoPixel", "accessory name")
+
+	flag.StringVar(&honeyKey, "honeycomb-api-key", "", "API key for sending trace data to HoneyComb")
+	flag.StringVar(&honeyDS, "honeycomb-dataset", "wnp-bridge", "Targeting Dataset for HoneyComb")
 }
 
 func main() {
 	flag.Parse()
 
-	initLogger()
+	ctx, log := initLogger(context.Background())
+	// Hook up HC's logging to zerolog
+	hclog.Info.SetOutput(log)
+
 	initMetrics()
 
 	go func() {
@@ -58,13 +65,30 @@ func main() {
 		}
 	}()
 
-	tracingCloser, err := initTracing("wnp-bridge")
+	var exporter exportTrace.SpanSyncer
+	if honeyKey == "" {
+		exporter, _ = stdout.NewExporter(stdout.Options{
+			Writer: log,
+		})
+	} else {
+		hcExporter, err := honeycomb.NewExporter(
+			honeycomb.Config{
+				APIKey: honeyKey,
+			},
+			honeycomb.TargetingDataset(honeyDS),
+			honeycomb.WithServiceName("wnp-bridge"),
+			honeycomb.WithDebugEnabled())
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to init honeycomb exporter")
+		}
+		defer hcExporter.Close()
+		exporter = hcExporter
+	}
+
+	err := initTracer(exporter)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init tracing")
 	}
-	defer tracingCloser.Close()
-
-	ctx := context.Background()
 
 	// lookup wifi neopixel by mDNS
 	if hostURL == "" {
@@ -116,16 +140,16 @@ func main() {
 	initLight(ctx, lb, strip)
 
 	updateColor := func(ctx context.Context, strip *wifineopixel) {
-		span, ctx := createSpan(ctx, "updateColor")
-		defer span.Finish()
+		ctx, span := createSpan(ctx, "updateColor")
+		defer span.End()
 
 		h := lb.Hue.GetValue()
 		s := lb.Saturation.GetValue() / 100
 		v := float64(lb.Brightness.GetValue()) / 100
 
-		span.SetTag("hue", h)
-		span.SetTag("sat", s)
-		span.SetTag("val", v)
+		span.SetAttribute("hue", h)
+		span.SetAttribute("sat", s)
+		span.SetAttribute("val", v)
 
 		log.Debug().Float64("hue", h).Float64("sat", s).Float64("val", v).Msg("updateColor")
 		c := colorful.Hsv(h, s, float64(v))
@@ -135,9 +159,9 @@ func main() {
 	}
 
 	lb.Hue.OnValueRemoteUpdate(func(value float64) {
-		span, ctx := createSpan(ctx, "lb.Hue.OnValueRemoteUpdate")
-		defer span.Finish()
-		span.SetTag("value", value)
+		ctx, span := createSpan(ctx, "lb.Hue.OnValueRemoteUpdate")
+		defer span.End()
+		span.SetAttribute("value", value)
 
 		start := time.Now()
 		log.Debug().Float64("hue", value).Msg("Changed Hue")
@@ -146,9 +170,9 @@ func main() {
 	})
 
 	lb.Saturation.OnValueRemoteUpdate(func(value float64) {
-		span, ctx := createSpan(ctx, "lb.Saturation.OnValueRemoteUpdate")
-		defer span.Finish()
-		span.SetTag("value", value)
+		ctx, span := createSpan(ctx, "lb.Saturation.OnValueRemoteUpdate")
+		defer span.End()
+		span.SetAttribute("value", value)
 
 		start := time.Now()
 		log.Debug().Float64("sat", value).Msg("Changed Saturation")
@@ -157,9 +181,9 @@ func main() {
 	})
 
 	lb.Brightness.OnValueRemoteUpdate(func(value int) {
-		span, ctx := createSpan(ctx, "lb.Brightness.OnValueRemoteUpdate")
-		defer span.Finish()
-		span.SetTag("value", value)
+		ctx, span := createSpan(ctx, "lb.Brightness.OnValueRemoteUpdate")
+		defer span.End()
+		span.SetAttribute("value", value)
 
 		start := time.Now()
 		log.Debug().Int("val", value).Msg("Changed Brightness")
@@ -168,8 +192,8 @@ func main() {
 	})
 
 	lb.On.OnValueRemoteGet(func() bool {
-		span, _ := createSpan(ctx, "lb.On.OnValueRemoteGet")
-		defer span.Finish()
+		_, span := createSpan(ctx, "lb.On.OnValueRemoteGet")
+		defer span.End()
 
 		start := time.Now()
 		log.Debug().Msg("lb.On.OnValueRemoteGet()")
@@ -179,9 +203,9 @@ func main() {
 	})
 
 	lb.On.OnValueRemoteUpdate(func(on bool) {
-		span, ctx := createSpan(ctx, "lb.On.OnValueRemoteUpdate")
-		defer span.Finish()
-		span.SetTag("value", on)
+		ctx, span := createSpan(ctx, "lb.On.OnValueRemoteUpdate")
+		defer span.End()
+		span.SetAttribute("value", on)
 
 		start := time.Now()
 		log.Debug().Bool("on", on).Msg("lb.On.OnValueRemoteUpdate")
@@ -199,8 +223,8 @@ func main() {
 	})
 
 	acc.OnIdentify(func() {
-		span, ctx := createSpan(ctx, "acc.OnIdentify")
-		defer span.Finish()
+		ctx, span := createSpan(ctx, "acc.OnIdentify")
+		defer span.End()
 
 		start := time.Now()
 		log.Debug().Msg("acc.OnIdentify()")
@@ -256,47 +280,16 @@ func main() {
 
 // initialize the HomeControl lightbulb service with the same values currently displaying on the WNP strip
 func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) {
-	span, ctx := createSpan(ctx, "initLight")
-	defer span.Finish()
+	ctx, span := createSpan(ctx, "initLight")
+	defer span.End()
 
 	h, s, v, err := strip.hsv(ctx)
-	span.SetTag("hsv", []float64{h, s, v})
+	span.SetAttribute("hsv", []float64{h, s, v})
 	if err != nil {
-		ext.Error.Set(span, true)
-		span.SetTag("err", err)
+		span.RecordError(ctx, err)
 		log.Fatal().Err(err).Msg("")
 	}
 	lb.Hue.SetValue(h)
 	lb.Saturation.SetValue(s * 100)
 	lb.Brightness.SetValue(int(v * 100))
-}
-
-func initTracing(name string) (io.Closer, error) {
-	cfg := jaegercfg.Configuration{
-		ServiceName: name,
-		Sampler: &jaegercfg.SamplerConfig{
-			Type:  jaeger.SamplerTypeRemote,
-			Param: 1,
-		},
-		Reporter: &jaegercfg.ReporterConfig{
-			LogSpans: true,
-		},
-	}
-
-	_, err := cfg.FromEnv()
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize tracer with a logger and a metrics factory
-	tracer, closer, err := cfg.NewTracer(
-		jaegercfg.Logger(jlogger{}),
-		jaegercfg.Metrics(jaegerprom.New()),
-	)
-	if err != nil {
-		return nil, err
-	}
-	// Set the singleton opentracing.Tracer with the Jaeger tracer.
-	opentracing.SetGlobalTracer(tracer)
-	return closer, nil
 }

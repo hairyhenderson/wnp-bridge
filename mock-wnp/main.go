@@ -31,7 +31,7 @@ func main() {
 		defer r.Body.Close()
 		slock.Lock()
 		defer slock.Unlock()
-		d.Decode(&states)
+		_ = d.Decode(&states)
 		log.Debug().Uints32("states", states).Msgf("/raw color: %v", uint32ToColor(states[0]))
 		w.WriteHeader(http.StatusOK)
 	})
@@ -41,7 +41,7 @@ func main() {
 		log.Debug().Bytes("req", dump).Msg("/size")
 
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("8"))
+		_, _ = w.Write([]byte("8"))
 		w.WriteHeader(http.StatusOK)
 	})
 	http.HandleFunc("/states", func(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +54,7 @@ func main() {
 		e := json.NewEncoder(w)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		e.Encode(states)
+		_ = e.Encode(states)
 	})
 
 	if err := http.ListenAndServe(":8888", nil); err != nil {
