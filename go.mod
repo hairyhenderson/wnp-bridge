@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/mdns v1.0.3
 	github.com/lucasb-eyer/go-colorful v1.0.3
 	github.com/opentracing-contrib/go-stdlib v0.0.0-20190519235532-cf7a6c988dc9
-	github.com/opentracing/opentracing-go v1.1.0
+	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.7.1
 	github.com/rs/zerolog v1.19.0
