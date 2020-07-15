@@ -1,4 +1,4 @@
-FROM golang:1.14.4-alpine AS build
+FROM golang:1.14.5-alpine AS build
 
 WORKDIR /src/wnp-bridge
 COPY . .
