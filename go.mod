@@ -9,6 +9,6 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.0.3
 	github.com/prometheus/client_golang v1.7.1
 	github.com/rs/zerolog v1.19.0
-	go.opentelemetry.io/otel v0.8.0
+	go.opentelemetry.io/otel v0.9.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 )
