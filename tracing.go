@@ -12,11 +12,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-const (
-	tagHTTPRequestContentLength  = "http.request.content_length"
-	tagHTTPResponseContentLength = "http.response.content_length"
-)
-
 func tagHTTPRequestHeader(h string) string  { return "http.request.header." + h }
 func tagHTTPResponseHeader(h string) string { return "http.response.header." + h }
 
@@ -24,24 +19,15 @@ func tagsFromRequest(span trace.Span, r *http.Request) {
 	for k, h := range r.Header {
 		span.SetAttribute(tagHTTPRequestHeader(k), strings.Join(h, "\n"))
 	}
-	span.SetAttributes(
-		standard.HTTPClientAttributesFromHTTPRequest(r)...,
-	)
-
-	span.SetAttribute(tagHTTPRequestContentLength, r.ContentLength)
+	span.SetAttributes(standard.HTTPClientAttributesFromHTTPRequest(r)...)
 }
 
 func tagsFromResponse(span trace.Span, r *http.Response) {
 	for k, h := range r.Header {
 		span.SetAttribute(tagHTTPResponseHeader(k), strings.Join(h, "\n"))
 	}
-	span.SetAttribute(tagHTTPResponseContentLength, r.ContentLength)
-	span.SetAttributes(
-		standard.HTTPStatusTextKey.String(r.Status),
-		standard.HTTPStatusCodeKey.Int(r.StatusCode),
-	)
-
-	span.SetAttribute("error", r.StatusCode > 399)
+	span.SetAttributes(standard.HTTPResponseContentLengthKey.Int64(r.ContentLength))
+	span.SetAttributes(standard.HTTPAttributesFromHTTPStatusCode(r.StatusCode)...)
 }
 
 func createSpan(ctx context.Context, operationName string) (context.Context, trace.Span) {
