@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/opentelemetry-exporter-go/honeycomb"
-	"go.opentelemetry.io/otel/exporters/trace/stdout"
+	"go.opentelemetry.io/otel/exporters/stdout"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
 
 	"github.com/hashicorp/mdns"
@@ -67,9 +67,7 @@ func main() {
 
 	var exporter exportTrace.SpanSyncer
 	if honeyKey == "" {
-		exporter, _ = stdout.NewExporter(stdout.Options{
-			Writer: log,
-		})
+		exporter, _ = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
 	} else {
 		hcExporter, err := honeycomb.NewExporter(
 			honeycomb.Config{
