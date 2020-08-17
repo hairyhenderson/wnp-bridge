@@ -3,13 +3,21 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/honeycombio/opentelemetry-exporter-go/honeycomb"
+	"go.opentelemetry.io/otel/api/global"
+	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/exporters/stdout"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
+	"google.golang.org/grpc/codes"
 
 	"github.com/hashicorp/mdns"
 	"github.com/lucasb-eyer/go-colorful"
@@ -21,7 +29,7 @@ import (
 	hclog "github.com/brutella/hc/log"
 	"github.com/brutella/hc/service"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -52,15 +60,19 @@ func init() {
 func main() {
 	flag.Parse()
 
-	ctx, log := initLogger(context.Background())
+	ctx, mainCancel := context.WithCancel(context.Background())
+	defer mainCancel()
+
+	ctx, log := initLogger(ctx)
 	// Hook up HC's logging to zerolog
 	hclog.Info.SetOutput(log)
 
 	initMetrics()
 
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe(":8080", nil); err != nil {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		if err := http.ListenAndServe(":8080", mux); err != nil {
 			log.Error().Err(err).Send()
 		}
 	}()
@@ -74,8 +86,7 @@ func main() {
 				APIKey: honeyKey,
 			},
 			honeycomb.TargetingDataset(honeyDS),
-			honeycomb.WithServiceName("wnp-bridge"),
-			honeycomb.WithDebugEnabled())
+		)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to init honeycomb exporter")
 		}
@@ -88,40 +99,25 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to init tracing")
 	}
 
+	tracer := global.Tracer("")
+	// provide a different context so that triggered spans aren't children of
+	// this one
+	initCtx, span := tracer.Start(ctx, "init")
+	defer span.End()
+
 	// lookup wifi neopixel by mDNS
 	if hostURL == "" {
-		// Make a channel for results and start listening
-		entriesCh := make(chan *mdns.ServiceEntry, 4)
-		go func() {
-			for entry := range entriesCh {
-				if strings.HasSuffix(entry.Name, "_neopixel._tcp.local.") {
-					log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
-					hostURL = "http://" + entry.Addr.String()
-				}
-			}
-		}()
-
-		// Start the lookup
-		opts := &mdns.QueryParam{
-			Timeout:             5 * time.Second,
-			Domain:              "local",
-			Service:             "_neopixel._tcp",
-			Entries:             entriesCh,
-			WantUnicastResponse: true,
-		}
-		err := mdns.Query(opts)
+		hostURL, err = mdnsLookup(ctx, "_neopixel._tcp", "local")
 		if err != nil {
-			log.Fatal().Err(err).Msg("")
-		}
-		close(entriesCh)
-		if hostURL == "" {
-			log.Fatal().Msg("neopixel not found")
+			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Unknown))
+			log.Fatal().Err(err).Send()
 		}
 	}
 
-	strip, err = newWifiNeopixel(ctx, hostURL)
+	strip, err = newWifiNeopixel(initCtx, hostURL)
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Unknown))
+		log.Fatal().Err(err).Send()
 	}
 
 	info := accessory.Info{
@@ -135,11 +131,110 @@ func main() {
 	acc := accessory.NewColoredLightbulb(info)
 	lb := acc.Lightbulb
 
-	initLight(ctx, lb, strip)
+	initLight(initCtx, lb, strip)
+
+	initResponders(ctx, acc)
+
+	t, err := hc.NewIPTransport(hc.Config{
+		Pin:         setupCode,
+		StoragePath: storagePath,
+	}, acc.Accessory)
+	if err != nil {
+		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Unknown))
+		log.Fatal().Err(err).Send()
+	}
+
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+
+	go func(ctx context.Context) {
+		select {
+		case sig := <-c:
+			zerolog.Ctx(ctx).Error().Stringer("signal", sig).Msg("terminating due to signal")
+			<-t.Stop()
+		case <-ctx.Done():
+			zerolog.Ctx(ctx).Error().Err(ctx.Err()).Msg("context done")
+			<-t.Stop()
+		}
+	}(ctx)
+
+	// End the init span before we start the HC transport
+	span.End()
+
+	log.Info().Msgf("starting up '%s'. setup code is %s", accName, setupCode)
+	t.Start()
+}
+
+func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
+	log := zerolog.Ctx(ctx)
+	ctx, span := global.Tracer("").Start(ctx, "mDNS host lookup")
+	defer span.End()
+
+	hostURL := ""
+
+	suffix := fmt.Sprintf("%s.%s.", svc, domain)
+	// Make a channel for results and start listening
+	entriesCh := make(chan *mdns.ServiceEntry, 4)
+	go func() {
+		for entry := range entriesCh {
+			if strings.HasSuffix(entry.Name, suffix) {
+				log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
+				span.AddEvent(ctx, "mDNS: got entry",
+					kv.String("entry.host", entry.Host),
+					kv.String("entry.name", entry.Name),
+					kv.Stringer("entry.addr", entry.Addr),
+					kv.Int("entry.port", entry.Port),
+				)
+				hostURL = "http://" + entry.Addr.String()
+			}
+		}
+	}()
+
+	// Start the lookup
+	opts := &mdns.QueryParam{
+		Timeout:             5 * time.Second,
+		Domain:              domain,
+		Service:             svc,
+		Entries:             entriesCh,
+		WantUnicastResponse: true,
+	}
+	err := mdns.Query(opts)
+	close(entriesCh)
+	if err != nil {
+		err = fmt.Errorf("neopixel not found: %w", err)
+	} else if hostURL == "" {
+		err = fmt.Errorf("neopixel not found")
+	}
+	return hostURL, err
+}
+
+// initialize the HomeControl lightbulb service with the same values currently displaying on the WNP strip
+func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) {
+	ctx, span := global.Tracer("").Start(ctx, "initLight")
+	defer span.End()
+	log := zerolog.Ctx(ctx)
+
+	h, s, v, err := strip.hsv(ctx)
+	span.SetAttribute("hsv", []float64{h, s, v})
+	if err != nil {
+		err = fmt.Errorf("strip.hsv failed while initializing light: %w", err)
+		span.RecordError(ctx, err)
+		log.Fatal().Err(err).Send()
+	}
+	lb.Hue.SetValue(h)
+	lb.Saturation.SetValue(s * 100)
+	lb.Brightness.SetValue(int(v * 100))
+}
+
+func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb) {
+	lb := acc.Lightbulb
+	tracer := global.Tracer("")
 
 	updateColor := func(ctx context.Context, strip *wifineopixel) {
-		ctx, span := createSpan(ctx, "updateColor")
+		ctx, span := tracer.Start(ctx, "updateColor")
 		defer span.End()
+		log := zerolog.Ctx(ctx)
 
 		h := lb.Hue.GetValue()
 		s := lb.Saturation.GetValue() / 100
@@ -152,12 +247,16 @@ func main() {
 		log.Debug().Float64("hue", h).Float64("sat", s).Float64("val", v).Msg("updateColor")
 		c := colorful.Hsv(h, s, float64(v))
 		if err := strip.setSolid(ctx, c); err != nil {
-			log.Error().Err(err).Msg("updateColor error")
+			err = fmt.Errorf("updateColor failed: %w", err)
+			log.Error().Err(err).Send()
+			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Unknown))
 		}
 	}
 
+	log := zerolog.Ctx(ctx)
+
 	lb.Hue.OnValueRemoteUpdate(func(value float64) {
-		ctx, span := createSpan(ctx, "lb.Hue.OnValueRemoteUpdate")
+		ctx, span := tracer.Start(ctx, "lb.Hue.OnValueRemoteUpdate")
 		defer span.End()
 		span.SetAttribute("value", value)
 
@@ -168,7 +267,7 @@ func main() {
 	})
 
 	lb.Saturation.OnValueRemoteUpdate(func(value float64) {
-		ctx, span := createSpan(ctx, "lb.Saturation.OnValueRemoteUpdate")
+		ctx, span := tracer.Start(ctx, "lb.Saturation.OnValueRemoteUpdate")
 		defer span.End()
 		span.SetAttribute("value", value)
 
@@ -179,7 +278,7 @@ func main() {
 	})
 
 	lb.Brightness.OnValueRemoteUpdate(func(value int) {
-		ctx, span := createSpan(ctx, "lb.Brightness.OnValueRemoteUpdate")
+		ctx, span := tracer.Start(ctx, "lb.Brightness.OnValueRemoteUpdate")
 		defer span.End()
 		span.SetAttribute("value", value)
 
@@ -190,7 +289,7 @@ func main() {
 	})
 
 	lb.On.OnValueRemoteGet(func() bool {
-		_, span := createSpan(ctx, "lb.On.OnValueRemoteGet")
+		_, span := tracer.Start(ctx, "lb.On.OnValueRemoteGet")
 		defer span.End()
 
 		start := time.Now()
@@ -201,7 +300,7 @@ func main() {
 	})
 
 	lb.On.OnValueRemoteUpdate(func(on bool) {
-		ctx, span := createSpan(ctx, "lb.On.OnValueRemoteUpdate")
+		ctx, span := tracer.Start(ctx, "lb.On.OnValueRemoteUpdate")
 		defer span.End()
 		span.SetAttribute("value", on)
 
@@ -221,7 +320,7 @@ func main() {
 	})
 
 	acc.OnIdentify(func() {
-		ctx, span := createSpan(ctx, "acc.OnIdentify")
+		ctx, span := tracer.Start(ctx, "acc.OnIdentify")
 		defer span.End()
 
 		start := time.Now()
@@ -259,35 +358,4 @@ func main() {
 		}
 		observeUpdateDuration("acc", "identify", start)
 	})
-
-	t, err := hc.NewIPTransport(hc.Config{
-		Pin:         setupCode,
-		StoragePath: storagePath,
-	}, acc.Accessory)
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
-
-	hc.OnTermination(func() {
-		<-t.Stop()
-	})
-
-	log.Info().Msgf("starting up '%s'. setup code is %s", accName, setupCode)
-	t.Start()
-}
-
-// initialize the HomeControl lightbulb service with the same values currently displaying on the WNP strip
-func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) {
-	ctx, span := createSpan(ctx, "initLight")
-	defer span.End()
-
-	h, s, v, err := strip.hsv(ctx)
-	span.SetAttribute("hsv", []float64{h, s, v})
-	if err != nil {
-		span.RecordError(ctx, err)
-		log.Fatal().Err(err).Msg("")
-	}
-	lb.Hue.SetValue(h)
-	lb.Saturation.SetValue(s * 100)
-	lb.Brightness.SetValue(int(v * 100))
 }

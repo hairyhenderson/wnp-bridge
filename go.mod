@@ -1,6 +1,6 @@
 module github.com/hairyhenderson/wnp-bridge
 
-go 1.14
+go 1.15
 
 require (
 	github.com/brutella/hc v1.2.2
@@ -13,4 +13,5 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout v0.10.0
 	go.opentelemetry.io/otel/sdk v0.10.0
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
+	google.golang.org/grpc v1.31.0
 )

@@ -28,5 +28,6 @@ func initLogger(ctx context.Context) (context.Context, zerolog.Logger) {
 		stdlog.SetOutput(stdlogger)
 	}
 
+	ctx = log.Logger.WithContext(ctx)
 	return ctx, log.Logger
 }
