@@ -60,6 +60,10 @@ func init() {
 func main() {
 	flag.Parse()
 
+	if honeyKey == "" {
+		honeyKey = os.Getenv("HONEYCOMB_API_KEY")
+	}
+
 	ctx, mainCancel := context.WithCancel(context.Background())
 	defer mainCancel()
 
