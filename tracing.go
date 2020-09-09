@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/standard"
 	"go.opentelemetry.io/otel/api/trace"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/semconv"
 )
 
 func tagHTTPRequestHeader(h string) string  { return "http.request.header." + h }
@@ -25,7 +25,7 @@ func tagsFromRequest(span trace.Span, r *http.Request) {
 	for k, h := range r.Header {
 		span.SetAttribute(tagHTTPRequestHeader(k), strings.Join(h, "\n"))
 	}
-	span.SetAttributes(standard.HTTPClientAttributesFromHTTPRequest(r)...)
+	span.SetAttributes(semconv.HTTPClientAttributesFromHTTPRequest(r)...)
 }
 
 func tagsFromResponse(span trace.Span, r *http.Response) {
@@ -36,8 +36,8 @@ func tagsFromResponse(span trace.Span, r *http.Response) {
 	for k, h := range r.Header {
 		span.SetAttribute(tagHTTPResponseHeader(k), strings.Join(h, "\n"))
 	}
-	span.SetAttributes(standard.HTTPResponseContentLengthKey.Int64(r.ContentLength))
-	span.SetAttributes(standard.HTTPAttributesFromHTTPStatusCode(r.StatusCode)...)
+	span.SetAttributes(semconv.HTTPResponseContentLengthKey.Int64(r.ContentLength))
+	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(r.StatusCode)...)
 }
 
 func initTracer(exporter exportTrace.SpanSyncer) error {
@@ -53,8 +53,8 @@ func initTracer(exporter exportTrace.SpanSyncer) error {
 		),
 		sdktrace.WithSyncer(exporter),
 		sdktrace.WithResource(resource.New(
-			standard.ServiceNameKey.String("wnp-bridge"),
-			standard.ServiceInstanceIDKey.String(hostname),
+			semconv.ServiceNameKey.String("wnp-bridge"),
+			semconv.ServiceInstanceIDKey.String(hostname),
 		)),
 	)
 	if err != nil {

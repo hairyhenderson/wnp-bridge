@@ -12,11 +12,11 @@ import (
 
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc/codes"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace"
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/instrumentation/httptrace"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type wifineopixel struct {
@@ -34,7 +34,7 @@ func newWifiNeopixel(ctx context.Context, addr string) (*wifineopixel, error) {
 	client := &http.Client{
 		Transport: instrumentHTTPClient("wnp_client", http.DefaultTransport),
 	}
-	strip = &wifineopixel{
+	strip := &wifineopixel{
 		address: u,
 		hc:      client,
 	}
@@ -216,7 +216,7 @@ func (w *wifineopixel) hsv(ctx context.Context) (h, s, v float64, err error) {
 	ctx, span := global.Tracer("").Start(ctx, "hsv")
 	defer span.End()
 
-	c, err := strip.getState(ctx, 0)
+	c, err := w.getState(ctx, 0)
 	if err != nil {
 		return 0, 0, 0, err
 	}
