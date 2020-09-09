@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/honeycombio/opentelemetry-exporter-go/honeycomb"
 	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp"
 	"go.opentelemetry.io/otel/exporters/stdout"
+	"go.opentelemetry.io/otel/label"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
-	"google.golang.org/grpc/codes"
 
 	"github.com/hashicorp/mdns"
 	"github.com/lucasb-eyer/go-colorful"
@@ -26,53 +26,64 @@ import (
 
 	"github.com/brutella/hc"
 	"github.com/brutella/hc/accessory"
-	hclog "github.com/brutella/hc/log"
 	"github.com/brutella/hc/service"
 
 	"github.com/rs/zerolog"
 )
 
-var (
-	strip       *wifineopixel
-	storagePath string
-	hostURL     string
-	setupCode   string
-	accName     string
-	honeyKey    string
-	honeyDS     string
-)
+func initTraceExporter(log zerolog.Logger, otlpEndpoint string) (closer func() error, err error) {
+	var exporter exportTrace.SpanSyncer
+	if otlpEndpoint == "" {
+		exporter, _ = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
+		closer = func() error { return nil }
+	} else {
+		otlpExp, err := otlp.NewExporter(
+			otlp.WithAddress(otlpEndpoint),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to init OTLP exporter: %w", err)
+		}
+		exporter = otlpExp
+		closer = otlpExp.Stop
+	}
 
-func init() {
+	return closer, initTracer(exporter)
+}
+
+func main() {
+	var (
+		storagePath  string
+		hostURL      string
+		setupCode    string
+		accName      string
+		otlpEndpoint string
+	)
 	const (
 		defaultPath = ""
 		usage       = "storage path for HomeControl data"
 	)
+
 	flag.StringVar(&storagePath, "path", defaultPath, usage)
 	flag.StringVar(&storagePath, "p", defaultPath, usage+" (shorthand)")
 	flag.StringVar(&hostURL, "host", "", "host URL for wifi neopixel device")
 	flag.StringVar(&setupCode, "code", "12344321", "setup code")
 	flag.StringVar(&accName, "name", "WiFi NeoPixel", "accessory name")
+	flag.StringVar(&otlpEndpoint, "otlp-endpoint", "localhost:55680", "Endpoint for sending OTLP traces")
 
-	flag.StringVar(&honeyKey, "honeycomb-api-key", "", "API key for sending trace data to HoneyComb")
-	flag.StringVar(&honeyDS, "honeycomb-dataset", "wnp-bridge", "Targeting Dataset for HoneyComb")
-}
-
-func main() {
 	flag.Parse()
-
-	if honeyKey == "" {
-		honeyKey = os.Getenv("HONEYCOMB_API_KEY")
-	}
 
 	ctx, mainCancel := context.WithCancel(context.Background())
 	defer mainCancel()
 
 	ctx, log := initLogger(ctx)
-	// Hook up HC's logging to zerolog
-	hclog.Info.SetOutput(log)
+
+	closer, err := initTraceExporter(log, otlpEndpoint)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to init tracing")
+	}
+	defer closer()
 
 	initMetrics()
-
 	go func() {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
@@ -80,28 +91,6 @@ func main() {
 			log.Error().Err(err).Send()
 		}
 	}()
-
-	var exporter exportTrace.SpanSyncer
-	if honeyKey == "" {
-		exporter, _ = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
-	} else {
-		hcExporter, err := honeycomb.NewExporter(
-			honeycomb.Config{
-				APIKey: honeyKey,
-			},
-			honeycomb.TargetingDataset(honeyDS),
-		)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to init honeycomb exporter")
-		}
-		defer hcExporter.Close()
-		exporter = hcExporter
-	}
-
-	err := initTracer(exporter)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to init tracing")
-	}
 
 	tracer := global.Tracer("")
 	// provide a different context so that triggered spans aren't children of
@@ -118,7 +107,7 @@ func main() {
 		}
 	}
 
-	strip, err = newWifiNeopixel(initCtx, hostURL)
+	strip, err := newWifiNeopixel(initCtx, hostURL)
 	if err != nil {
 		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Unknown))
 		log.Fatal().Err(err).Send()
@@ -137,7 +126,7 @@ func main() {
 
 	initLight(initCtx, lb, strip)
 
-	initResponders(ctx, acc)
+	initResponders(ctx, acc, strip)
 
 	t, err := hc.NewIPTransport(hc.Config{
 		Pin:         setupCode,
@@ -185,10 +174,10 @@ func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 			if strings.HasSuffix(entry.Name, suffix) {
 				log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
 				span.AddEvent(ctx, "mDNS: got entry",
-					kv.String("entry.host", entry.Host),
-					kv.String("entry.name", entry.Name),
-					kv.Stringer("entry.addr", entry.Addr),
-					kv.Int("entry.port", entry.Port),
+					label.String("entry.host", entry.Host),
+					label.String("entry.name", entry.Name),
+					label.Stringer("entry.addr", entry.Addr),
+					label.Int("entry.port", entry.Port),
 				)
 				hostURL = "http://" + entry.Addr.String()
 			}
@@ -231,7 +220,7 @@ func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineo
 	lb.Brightness.SetValue(int(v * 100))
 }
 
-func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb) {
+func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip *wifineopixel) {
 	lb := acc.Lightbulb
 	tracer := global.Tracer("")
 
