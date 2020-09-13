@@ -57,6 +57,7 @@ func main() {
 		setupCode    string
 		accName      string
 		otlpEndpoint string
+		debug        bool
 	)
 	const (
 		defaultPath = ""
@@ -69,6 +70,7 @@ func main() {
 	flag.StringVar(&setupCode, "code", "12344321", "setup code")
 	flag.StringVar(&accName, "name", "WiFi NeoPixel", "accessory name")
 	flag.StringVar(&otlpEndpoint, "otlp-endpoint", "localhost:55680", "Endpoint for sending OTLP traces")
+	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	flag.Parse()
 
@@ -76,6 +78,9 @@ func main() {
 	defer mainCancel()
 
 	ctx, log := initLogger(ctx)
+	if debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
 
 	closer, err := initTraceExporter(log, otlpEndpoint)
 	if err != nil {
