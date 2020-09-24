@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/mdns v1.0.3
 	github.com/lucasb-eyer/go-colorful v1.0.3
 	github.com/prometheus/client_golang v1.7.1
-	github.com/rs/zerolog v1.19.0
+	github.com/rs/zerolog v1.20.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace v0.11.0
 	go.opentelemetry.io/otel v0.11.0
 	go.opentelemetry.io/otel/exporters/otlp v0.11.0
