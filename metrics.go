@@ -5,7 +5,9 @@ import (
 
 	"time"
 
+	"github.com/povilasv/prommod"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -18,17 +20,17 @@ var (
 
 func initMetrics() {
 	ns := "wnp_bridge"
-	// prometheus.MustRegister(prommod.NewCollector(ns), prometheus.NewBuildInfoCollector())
+	prometheus.MustRegister(prommod.NewCollector(ns), prometheus.NewBuildInfoCollector())
 
 	// hue: Hue, sat: Saturation, val: Value/Brightness, on: On, acc: Accessory (identify event)
 	for _, sub := range []string{"hue", "sat", "val", "on", "acc"} {
-		updateMetrics[sub+"UpdateDurationHist"] = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		updateMetrics[sub+"UpdateDurationHist"] = promauto.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: sub,
 			Name:      "update_duration_seconds",
 			Buckets:   []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10},
 		}, []string{"event"})
-		updateMetrics[sub+"UpdateDurationSumm"] = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		updateMetrics[sub+"UpdateDurationSumm"] = promauto.NewSummaryVec(prometheus.SummaryOpts{
 			Namespace:  ns,
 			Subsystem:  sub,
 			Name:       "update_duration_quantile_seconds",
@@ -36,11 +38,7 @@ func initMetrics() {
 		}, []string{"event"})
 	}
 
-	for _, o := range updateMetrics {
-		prometheus.MustRegister(o)
-	}
-
-	initClientMetrics(ns, prometheus.DefaultRegisterer)
+	initClientMetrics(ns)
 }
 
 func observeUpdateDuration(sub, event string, start time.Time) {
@@ -50,16 +48,16 @@ func observeUpdateDuration(sub, event string, start time.Time) {
 	updateMetrics[sub+"UpdateDurationSumm"].With(l).Observe(diff.Seconds())
 }
 
-func initClientMetrics(ns string, reg prometheus.Registerer) {
+func initClientMetrics(ns string) {
 	sub := "client"
-	clientGauges["clientInFlightGauge"] = prometheus.NewGauge(prometheus.GaugeOpts{
+	clientGauges["clientInFlightGauge"] = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: ns,
 		Subsystem: sub,
 		Name:      "in_flight_requests",
 		Help:      "A gauge of in-flight requests for the wrapped client.",
 	})
 
-	clientCounterVecs["clientRequestCounter"] = prometheus.NewCounterVec(
+	clientCounterVecs["clientRequestCounter"] = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
 			Subsystem: sub,
@@ -70,7 +68,7 @@ func initClientMetrics(ns string, reg prometheus.Registerer) {
 	)
 
 	clientObservers = map[string]prometheus.ObserverVec{
-		"traceDurationHist": prometheus.NewHistogramVec(
+		"traceDurationHist": promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: ns,
 				Subsystem: sub,
@@ -80,7 +78,7 @@ func initClientMetrics(ns string, reg prometheus.Registerer) {
 			},
 			[]string{"client", "phase"},
 		),
-		"traceDurationSumm": prometheus.NewSummaryVec(
+		"traceDurationSumm": promauto.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Namespace:  ns,
 				Subsystem:  sub,
@@ -90,7 +88,7 @@ func initClientMetrics(ns string, reg prometheus.Registerer) {
 			},
 			[]string{"client", "phase"},
 		),
-		"clientDurationHist": prometheus.NewHistogramVec(
+		"clientDurationHist": promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Namespace: ns,
 				Subsystem: sub,
@@ -100,7 +98,7 @@ func initClientMetrics(ns string, reg prometheus.Registerer) {
 			},
 			[]string{"client", "method"},
 		),
-		"clientDurationSumm": prometheus.NewSummaryVec(
+		"clientDurationSumm": promauto.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Namespace:  ns,
 				Subsystem:  sub,
@@ -110,16 +108,6 @@ func initClientMetrics(ns string, reg prometheus.Registerer) {
 			},
 			[]string{"client", "method"},
 		),
-	}
-
-	for _, m := range clientObservers {
-		reg.MustRegister(m)
-	}
-	for _, m := range clientCounterVecs {
-		reg.MustRegister(m)
-	}
-	for _, m := range clientGauges {
-		reg.MustRegister(m)
 	}
 }
 

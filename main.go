@@ -39,6 +39,7 @@ func initTraceExporter(log zerolog.Logger, otlpEndpoint string) (closer func() e
 	} else {
 		otlpExp, err := otlp.NewExporter(
 			otlp.WithAddress(otlpEndpoint),
+			otlp.WithInsecure(),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init OTLP exporter: %w", err)

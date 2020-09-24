@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/label"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -45,6 +47,13 @@ func initTracer(exporter exportTrace.SpanSyncer) error {
 	if err != nil {
 		return fmt.Errorf("failed to lookup hostname: %w", err)
 	}
+	version := "unknown"
+	module := "unknown"
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		version = bi.Main.Version
+		module = bi.Main.Path
+		// sum = bi.Main.Sum
+	}
 	tp, err := sdktrace.NewProvider(
 		sdktrace.WithConfig(
 			sdktrace.Config{
@@ -55,6 +64,8 @@ func initTracer(exporter exportTrace.SpanSyncer) error {
 		sdktrace.WithResource(resource.New(
 			semconv.ServiceNameKey.String("wnp-bridge"),
 			semconv.ServiceInstanceIDKey.String(hostname),
+			label.String("module.path", module),
+			semconv.ServiceVersionKey.String(version),
 		)),
 	)
 	if err != nil {
