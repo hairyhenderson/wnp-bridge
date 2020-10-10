@@ -24,9 +24,13 @@ func tagsFromRequest(span trace.Span, r *http.Request) {
 		return
 	}
 
+	hdrLabels := make([]label.KeyValue, len(r.Header))
+	i := 0
 	for k, h := range r.Header {
-		span.SetAttribute(tagHTTPRequestHeader(k), strings.Join(h, "\n"))
+		hdrLabels[i] = label.String(tagHTTPRequestHeader(k), strings.Join(h, "\n"))
+		i++
 	}
+	span.SetAttributes(hdrLabels...)
 	span.SetAttributes(semconv.HTTPClientAttributesFromHTTPRequest(r)...)
 }
 
@@ -35,9 +39,13 @@ func tagsFromResponse(span trace.Span, r *http.Response) {
 		return
 	}
 
+	hdrLabels := make([]label.KeyValue, len(r.Header))
+	i := 0
 	for k, h := range r.Header {
-		span.SetAttribute(tagHTTPResponseHeader(k), strings.Join(h, "\n"))
+		hdrLabels[i] = label.String(tagHTTPResponseHeader(k), strings.Join(h, "\n"))
+		i++
 	}
+	span.SetAttributes(hdrLabels...)
 	span.SetAttributes(semconv.HTTPResponseContentLengthKey.Int64(r.ContentLength))
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(r.StatusCode)...)
 }
