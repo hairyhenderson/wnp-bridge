@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/label"
 )
 
 type wifineopixel struct {
@@ -96,7 +97,7 @@ func (w *wifineopixel) do(ctx context.Context, method, path, contentType string,
 	}
 
 	if err != nil {
-		span.RecordError(ctx, err, trace.WithErrorStatus(codes.Unknown))
+		span.RecordError(ctx, err, trace.WithErrorStatus(codes.Error))
 	}
 
 	return res, err
@@ -133,7 +134,7 @@ func (w *wifineopixel) on(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	span.SetAttribute("body", b)
+	span.SetAttributes(label.Stringer("body", b))
 
 	log.Debug().Str("body", b.String()).Msg("sending body")
 	resp, err := w.post(ctx, "/raw", "application/json", b)
@@ -157,7 +158,7 @@ func (w *wifineopixel) on(ctx context.Context) error {
 func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) error {
 	ctx, span := global.Tracer("").Start(ctx, "setState")
 	defer span.End()
-	span.SetAttribute("state", state)
+	span.SetAttributes(label.Array("state", state))
 
 	if _, _, v := state[0].Hsv(); v > 0 && w.isOn() {
 		w.onState = w.state
@@ -169,7 +170,7 @@ func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) err
 	if err != nil {
 		return err
 	}
-	span.SetAttribute("body", b)
+	span.SetAttributes(label.Stringer("body", b))
 
 	resp, err := w.post(ctx, "/raw", "application/json", b)
 	if err != nil {

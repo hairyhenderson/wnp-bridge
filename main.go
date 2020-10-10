@@ -108,14 +108,14 @@ func main() {
 	if hostURL == "" {
 		hostURL, err = mdnsLookup(ctx, "_neopixel._tcp", "local")
 		if err != nil {
-			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Unknown))
+			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Error))
 			log.Fatal().Err(err).Send()
 		}
 	}
 
 	strip, err := newWifiNeopixel(initCtx, hostURL)
 	if err != nil {
-		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Unknown))
+		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Error))
 		log.Fatal().Err(err).Send()
 	}
 
@@ -139,7 +139,7 @@ func main() {
 		StoragePath: storagePath,
 	}, acc.Accessory)
 	if err != nil {
-		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Unknown))
+		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Error))
 		log.Fatal().Err(err).Send()
 	}
 
@@ -215,7 +215,7 @@ func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineo
 	log := zerolog.Ctx(ctx)
 
 	h, s, v, err := strip.hsv(ctx)
-	span.SetAttribute("hsv", []float64{h, s, v})
+	span.SetAttributes(label.Array("hsv", []float64{h, s, v}))
 	if err != nil {
 		err = fmt.Errorf("strip.hsv failed while initializing light: %w", err)
 		span.RecordError(ctx, err)
@@ -239,16 +239,18 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 		s := lb.Saturation.GetValue() / 100
 		v := float64(lb.Brightness.GetValue()) / 100
 
-		span.SetAttribute("hue", h)
-		span.SetAttribute("sat", s)
-		span.SetAttribute("val", v)
+		span.SetAttributes(
+			label.Float64("hue", h),
+			label.Float64("sat", s),
+			label.Float64("val", v),
+		)
 
 		log.Debug().Float64("hue", h).Float64("sat", s).Float64("val", v).Msg("updateColor")
 		c := colorful.Hsv(h, s, float64(v))
 		if err := strip.setSolid(ctx, c); err != nil {
 			err = fmt.Errorf("updateColor failed: %w", err)
 			log.Error().Err(err).Send()
-			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Unknown))
+			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Error))
 		}
 	}
 
@@ -257,7 +259,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.Hue.OnValueRemoteUpdate(func(value float64) {
 		ctx, span := tracer.Start(ctx, "lb.Hue.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttribute("value", value)
+		span.SetAttributes(label.Float64("value", value))
 
 		start := time.Now()
 		log.Debug().Float64("hue", value).Msg("Changed Hue")
@@ -268,7 +270,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.Saturation.OnValueRemoteUpdate(func(value float64) {
 		ctx, span := tracer.Start(ctx, "lb.Saturation.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttribute("value", value)
+		span.SetAttributes(label.Float64("value", value))
 
 		start := time.Now()
 		log.Debug().Float64("sat", value).Msg("Changed Saturation")
@@ -279,7 +281,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.Brightness.OnValueRemoteUpdate(func(value int) {
 		ctx, span := tracer.Start(ctx, "lb.Brightness.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttribute("value", value)
+		span.SetAttributes(label.Int("value", value))
 
 		start := time.Now()
 		log.Debug().Int("val", value).Msg("Changed Brightness")
@@ -301,7 +303,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.On.OnValueRemoteUpdate(func(on bool) {
 		ctx, span := tracer.Start(ctx, "lb.On.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttribute("value", on)
+		span.SetAttributes(label.Bool("value", on))
 
 		start := time.Now()
 		log.Debug().Bool("on", on).Msg("lb.On.OnValueRemoteUpdate")
