@@ -10,7 +10,7 @@ require (
 	github.com/prometheus/client_golang v1.7.1
 	github.com/rs/zerolog v1.20.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.12.0
-	go.opentelemetry.io/otel v0.12.0
+	go.opentelemetry.io/otel v0.13.0
 	go.opentelemetry.io/otel/exporters/otlp v0.12.0
 	go.opentelemetry.io/otel/exporters/stdout v0.12.0
 	go.opentelemetry.io/otel/sdk v0.12.0
