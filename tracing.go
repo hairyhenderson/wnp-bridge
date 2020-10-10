@@ -42,7 +42,7 @@ func tagsFromResponse(span trace.Span, r *http.Response) {
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(r.StatusCode)...)
 }
 
-func initTracer(exporter exportTrace.SpanSyncer) error {
+func initTracer(exporter exportTrace.SpanExporter) error {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return fmt.Errorf("failed to lookup hostname: %w", err)
@@ -54,7 +54,7 @@ func initTracer(exporter exportTrace.SpanSyncer) error {
 		module = bi.Main.Path
 		// sum = bi.Main.Sum
 	}
-	tp, err := sdktrace.NewProvider(
+	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithConfig(
 			sdktrace.Config{
 				DefaultSampler: sdktrace.AlwaysSample(),
@@ -68,9 +68,6 @@ func initTracer(exporter exportTrace.SpanSyncer) error {
 			semconv.ServiceVersionKey.String(version),
 		)),
 	)
-	if err != nil {
-		return err
-	}
-	global.SetTraceProvider(tp)
+	global.SetTracerProvider(tp)
 	return nil
 }

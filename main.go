@@ -31,24 +31,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func initTraceExporter(log zerolog.Logger, otlpEndpoint string) (closer func() error, err error) {
-	var exporter exportTrace.SpanSyncer
+func initTraceExporter(log zerolog.Logger, otlpEndpoint string) (closer func(context.Context) error, err error) {
+	var exporter exportTrace.SpanExporter
 	if otlpEndpoint == "" {
-		exporter, _ = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
-		closer = func() error { return nil }
+		exporter, err = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
+		if err != nil {
+			return nil, fmt.Errorf("failed to init stdout exporter: %w", err)
+		}
 	} else {
-		otlpExp, err := otlp.NewExporter(
+		exporter, err = otlp.NewExporter(
 			otlp.WithAddress(otlpEndpoint),
 			otlp.WithInsecure(),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init OTLP exporter: %w", err)
 		}
-		exporter = otlpExp
-		closer = otlpExp.Stop
 	}
 
-	return closer, initTracer(exporter)
+	return exporter.Shutdown, initTracer(exporter)
 }
 
 func main() {
@@ -87,7 +87,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init tracing")
 	}
-	defer closer()
+	defer closer(ctx)
 
 	initMetrics()
 	go func() {

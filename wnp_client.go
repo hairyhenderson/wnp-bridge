@@ -13,7 +13,8 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/rs/zerolog/log"
 
-	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/codes"
@@ -82,8 +83,8 @@ func (w *wifineopixel) do(ctx context.Context, method, path, contentType string,
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	ctx, req = httptrace.W3C(ctx, req)
-	httptrace.Inject(ctx, req)
+	ctx, req = otelhttptrace.W3C(ctx, req)
+	otelhttptrace.Inject(ctx, req)
 	span := trace.SpanFromContext(ctx)
 	defer span.End()
 
