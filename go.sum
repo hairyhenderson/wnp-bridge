@@ -33,6 +33,7 @@ github.com/brutella/dnssd v1.1.1 h1:Ar5ytE2Z9x5DTmuNnASlMTBpcQWQLm9ceHb326s0ykg=
 github.com/brutella/dnssd v1.1.1/go.mod h1:9gIcMKQSJvYlO2x+HR50cqqjghb9IWK9hvykmyveVVs=
 github.com/brutella/hc v1.2.2 h1:1idJyTuZTmxcOD+UkGEoXfoKbQjDp/7PHyh0iaDGiUU=
 github.com/brutella/hc v1.2.2/go.mod h1:zknCv+aeiYM27tBXr3WFL49C8UPHMxP2IVY9c5TpMOY=
+github.com/brutella/hc v1.2.3/go.mod h1:zknCv+aeiYM27tBXr3WFL49C8UPHMxP2IVY9c5TpMOY=
 github.com/casbin/casbin/v2 v2.1.2/go.mod h1:YcPU1XXisHhLzuxH9coDNf2FbKpjGlbCg3n9yuLkIJQ=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
