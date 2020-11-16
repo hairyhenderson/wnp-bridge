@@ -26,6 +26,7 @@ import (
 
 	"github.com/brutella/hc"
 	"github.com/brutella/hc/accessory"
+	hclog "github.com/brutella/hc/log"
 	"github.com/brutella/hc/service"
 
 	"github.com/rs/zerolog"
@@ -81,6 +82,7 @@ func main() {
 	ctx, log := initLogger(ctx)
 	if debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		hclog.Debug.Enable()
 	}
 
 	closer, err := initTraceExporter(log, otlpEndpoint)

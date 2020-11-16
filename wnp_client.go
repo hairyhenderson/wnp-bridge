@@ -7,8 +7,10 @@ import (
 	"image/color"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/rs/zerolog/log"
@@ -34,7 +36,18 @@ func newWifiNeopixel(ctx context.Context, addr string) (*wifineopixel, error) {
 		return nil, err
 	}
 	client := &http.Client{
-		Transport: instrumentHTTPClient("wnp_client", http.DefaultTransport),
+		Transport: instrumentHTTPClient("wnp_client", &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:       30 * time.Second,
+				KeepAlive:     30 * time.Second,
+				FallbackDelay: -1, // the ESP8266 doesn't speak IPv6
+			}).DialContext,
+			ForceAttemptHTTP2:     false, // the ESP8266 doesn't support H/2
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     false,
+		}),
 	}
 	strip := &wifineopixel{
 		address: u,
