@@ -59,6 +59,7 @@ func main() {
 		setupCode    string
 		accName      string
 		otlpEndpoint string
+		addr         string
 		debug        bool
 	)
 	const (
@@ -68,6 +69,7 @@ func main() {
 
 	flag.StringVar(&storagePath, "path", defaultPath, usage)
 	flag.StringVar(&storagePath, "p", defaultPath, usage+" (shorthand)")
+	flag.StringVar(&addr, "addr", "", usage)
 	flag.StringVar(&hostURL, "host", "", "host URL for wifi neopixel device")
 	flag.StringVar(&setupCode, "code", "12344321", "setup code")
 	flag.StringVar(&accName, "name", "WiFi NeoPixel", "accessory name")
@@ -75,6 +77,13 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 
 	flag.Parse()
+
+	parts := strings.SplitN(addr, ":", 2)
+	ip := parts[0]
+	port := ""
+	if len(parts) == 2 {
+		port = parts[1]
+	}
 
 	ctx, mainCancel := context.WithCancel(context.Background())
 	defer mainCancel()
@@ -139,6 +148,8 @@ func main() {
 	t, err := hc.NewIPTransport(hc.Config{
 		Pin:         setupCode,
 		StoragePath: storagePath,
+		IP:          ip,
+		Port:        port,
 	}, acc.Accessory)
 	if err != nil {
 		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Error))
