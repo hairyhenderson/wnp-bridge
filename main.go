@@ -11,13 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp"
 	"go.opentelemetry.io/otel/exporters/stdout"
 	"go.opentelemetry.io/otel/label"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/hashicorp/mdns"
 	"github.com/lucasb-eyer/go-colorful"
@@ -32,7 +31,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func initTraceExporter(log zerolog.Logger, otlpEndpoint string) (closer func(context.Context) error, err error) {
+func initTraceExporter(ctx context.Context, log zerolog.Logger, otlpEndpoint string) (closer func(context.Context) error, err error) {
 	var exporter exportTrace.SpanExporter
 	if otlpEndpoint == "" {
 		exporter, err = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
@@ -41,6 +40,7 @@ func initTraceExporter(log zerolog.Logger, otlpEndpoint string) (closer func(con
 		}
 	} else {
 		exporter, err = otlp.NewExporter(
+			ctx,
 			otlp.WithAddress(otlpEndpoint),
 			otlp.WithInsecure(),
 		)
@@ -94,7 +94,7 @@ func main() {
 		hclog.Debug.Enable()
 	}
 
-	closer, err := initTraceExporter(log, otlpEndpoint)
+	closer, err := initTraceExporter(ctx, log, otlpEndpoint)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init tracing")
 	}
@@ -109,7 +109,7 @@ func main() {
 		}
 	}()
 
-	tracer := global.Tracer("")
+	tracer := otel.Tracer("")
 	// provide a different context so that triggered spans aren't children of
 	// this one
 	initCtx, span := tracer.Start(ctx, "init")
@@ -119,14 +119,14 @@ func main() {
 	if hostURL == "" {
 		hostURL, err = mdnsLookup(ctx, "_neopixel._tcp", "local")
 		if err != nil {
-			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Error))
+			span.RecordError(err)
 			log.Fatal().Err(err).Send()
 		}
 	}
 
 	strip, err := newWifiNeopixel(initCtx, hostURL)
 	if err != nil {
-		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Error))
+		span.RecordError(err)
 		log.Fatal().Err(err).Send()
 	}
 
@@ -152,7 +152,7 @@ func main() {
 		Port:        port,
 	}, acc.Accessory)
 	if err != nil {
-		span.RecordError(initCtx, err, trace.WithErrorStatus(codes.Error))
+		span.RecordError(err)
 		log.Fatal().Err(err).Send()
 	}
 
@@ -180,7 +180,7 @@ func main() {
 
 func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 	log := zerolog.Ctx(ctx)
-	ctx, span := global.Tracer("").Start(ctx, "mDNS host lookup")
+	ctx, span := otel.Tracer("").Start(ctx, "mDNS host lookup")
 	defer span.End()
 
 	hostURL := ""
@@ -192,12 +192,13 @@ func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 		for entry := range entriesCh {
 			if strings.HasSuffix(entry.Name, suffix) {
 				log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
-				span.AddEvent(ctx, "mDNS: got entry",
-					label.String("entry.host", entry.Host),
-					label.String("entry.name", entry.Name),
-					label.Stringer("entry.addr", entry.Addr),
-					label.Int("entry.port", entry.Port),
-				)
+				span.AddEvent("mDNS: got entry",
+					trace.WithAttributes(
+						label.String("entry.host", entry.Host),
+						label.String("entry.name", entry.Name),
+						label.Stringer("entry.addr", entry.Addr),
+						label.Int("entry.port", entry.Port),
+					))
 				hostURL = "http://" + entry.Addr.String()
 			}
 		}
@@ -223,7 +224,7 @@ func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 
 // initialize the HomeControl lightbulb service with the same values currently displaying on the WNP strip
 func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) {
-	ctx, span := global.Tracer("").Start(ctx, "initLight")
+	ctx, span := otel.Tracer("").Start(ctx, "initLight")
 	defer span.End()
 	log := zerolog.Ctx(ctx)
 
@@ -231,7 +232,7 @@ func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineo
 	span.SetAttributes(label.Array("hsv", []float64{h, s, v}))
 	if err != nil {
 		err = fmt.Errorf("strip.hsv failed while initializing light: %w", err)
-		span.RecordError(ctx, err)
+		span.RecordError(err)
 		log.Fatal().Err(err).Send()
 	}
 	lb.Hue.SetValue(h)
@@ -241,7 +242,7 @@ func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineo
 
 func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip *wifineopixel) {
 	lb := acc.Lightbulb
-	tracer := global.Tracer("")
+	tracer := otel.Tracer("")
 
 	updateColor := func(ctx context.Context, strip *wifineopixel) {
 		ctx, span := tracer.Start(ctx, "updateColor")
@@ -263,7 +264,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 		if err := strip.setSolid(ctx, c); err != nil {
 			err = fmt.Errorf("updateColor failed: %w", err)
 			log.Error().Err(err).Send()
-			span.RecordError(ctx, err, trace.WithErrorStatus(codes.Error))
+			span.RecordError(err)
 		}
 	}
 

@@ -7,13 +7,13 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/label"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/semconv"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func tagHTTPRequestHeader(h string) string  { return "http.request.header." + h }
@@ -69,13 +69,13 @@ func initTracer(exporter exportTrace.SpanExporter) error {
 			},
 		),
 		sdktrace.WithSyncer(exporter),
-		sdktrace.WithResource(resource.New(
+		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.ServiceNameKey.String("wnp-bridge"),
 			semconv.ServiceInstanceIDKey.String(hostname),
 			label.String("module.path", module),
 			semconv.ServiceVersionKey.String(version),
 		)),
 	)
-	global.SetTracerProvider(tp)
+	otel.SetTracerProvider(tp)
 	return nil
 }
