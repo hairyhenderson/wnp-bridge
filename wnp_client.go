@@ -16,11 +16,10 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+	"go.opentelemetry.io/otel"
 
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type wifineopixel struct {
@@ -61,7 +60,7 @@ func newWifiNeopixel(ctx context.Context, addr string) (*wifineopixel, error) {
 }
 
 func (w *wifineopixel) initState(ctx context.Context) (err error) {
-	ctx, span := global.Tracer("").Start(ctx, "initState")
+	ctx, span := otel.Tracer("").Start(ctx, "initState")
 	defer span.End()
 
 	w.state, err = w.getStates(ctx)
@@ -110,14 +109,14 @@ func (w *wifineopixel) do(ctx context.Context, method, path, contentType string,
 	}
 
 	if err != nil {
-		span.RecordError(ctx, err, trace.WithErrorStatus(codes.Error))
+		span.RecordError(err)
 	}
 
 	return res, err
 }
 
 func (w *wifineopixel) clear(ctx context.Context) error {
-	ctx, span := global.Tracer("").Start(ctx, "clear")
+	ctx, span := otel.Tracer("").Start(ctx, "clear")
 	defer span.End()
 
 	resp, err := w.get(ctx, "/clear")
@@ -139,7 +138,7 @@ func (w *wifineopixel) clear(ctx context.Context) error {
 }
 
 func (w *wifineopixel) on(ctx context.Context) error {
-	ctx, span := global.Tracer("").Start(ctx, "on")
+	ctx, span := otel.Tracer("").Start(ctx, "on")
 	defer span.End()
 
 	b := &bytes.Buffer{}
@@ -169,7 +168,7 @@ func (w *wifineopixel) on(ctx context.Context) error {
 }
 
 func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) error {
-	ctx, span := global.Tracer("").Start(ctx, "setState")
+	ctx, span := otel.Tracer("").Start(ctx, "setState")
 	defer span.End()
 	span.SetAttributes(label.Array("state", state))
 
@@ -196,7 +195,7 @@ func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) err
 }
 
 func (w *wifineopixel) setSolid(ctx context.Context, c colorful.Color) error {
-	ctx, span := global.Tracer("").Start(ctx, "setSolid")
+	ctx, span := otel.Tracer("").Start(ctx, "setSolid")
 	defer span.End()
 
 	log.Debug().Msgf("setSolid(%v)", c)
@@ -228,7 +227,7 @@ func (w *wifineopixel) isOn() bool {
 }
 
 func (w *wifineopixel) hsv(ctx context.Context) (h, s, v float64, err error) {
-	ctx, span := global.Tracer("").Start(ctx, "hsv")
+	ctx, span := otel.Tracer("").Start(ctx, "hsv")
 	defer span.End()
 
 	c, err := w.getState(ctx, 0)
@@ -240,7 +239,7 @@ func (w *wifineopixel) hsv(ctx context.Context) (h, s, v float64, err error) {
 }
 
 func (w *wifineopixel) getStates(ctx context.Context) ([]colorful.Color, error) {
-	tracer := global.Tracer("")
+	tracer := otel.Tracer("")
 	ctx, span := tracer.Start(ctx, "getStates")
 	defer span.End()
 
@@ -271,7 +270,7 @@ func (w *wifineopixel) getStates(ctx context.Context) ([]colorful.Color, error) 
 }
 
 func (w *wifineopixel) getState(ctx context.Context, pixel int) (state colorful.Color, err error) {
-	ctx, span := global.Tracer("").Start(ctx, "getState")
+	ctx, span := otel.Tracer("").Start(ctx, "getState")
 	defer span.End()
 
 	w.state, err = w.getStates(ctx)
