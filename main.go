@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
 	"go.opentelemetry.io/otel/exporters/stdout"
 	"go.opentelemetry.io/otel/label"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
@@ -39,11 +40,8 @@ func initTraceExporter(ctx context.Context, log zerolog.Logger, otlpEndpoint str
 			return nil, fmt.Errorf("failed to init stdout exporter: %w", err)
 		}
 	} else {
-		exporter, err = otlp.NewExporter(
-			ctx,
-			otlp.WithAddress(otlpEndpoint),
-			otlp.WithInsecure(),
-		)
+		driver := otlpgrpc.NewDriver(otlpgrpc.WithEndpoint(otlpEndpoint), otlpgrpc.WithInsecure())
+		exporter, err = otlp.NewExporter(ctx, driver)
 		if err != nil {
 			return nil, fmt.Errorf("failed to init OTLP exporter: %w", err)
 		}
