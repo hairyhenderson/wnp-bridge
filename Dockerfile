@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.1.7-experimental
+# syntax=docker/dockerfile:1.2.1-labs
 FROM golang:1.15.8-alpine AS build
 
 ARG TARGETOS
