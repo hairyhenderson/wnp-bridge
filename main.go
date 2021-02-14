@@ -67,7 +67,7 @@ func main() {
 
 	flag.StringVar(&storagePath, "path", defaultPath, usage)
 	flag.StringVar(&storagePath, "p", defaultPath, usage+" (shorthand)")
-	flag.StringVar(&addr, "addr", "", usage)
+	flag.StringVar(&addr, "addr", "", "address to listen to")
 	flag.StringVar(&hostURL, "host", "", "host URL for wifi neopixel device")
 	flag.StringVar(&setupCode, "code", "12344321", "setup code")
 	flag.StringVar(&accName, "name", "WiFi NeoPixel", "accessory name")
