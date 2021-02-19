@@ -13,12 +13,10 @@ jobs:
       - uses: actions/checkout@v1
       - run: CGO_ENABLED=0 go build
       - run: go test
-  # lint:
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: 'hairyhenderson/gomplate-ci-build:latest'
-  #   steps:
-  #     - uses: actions/checkout@master
-  #       with:
-  #         path: ./src/github.com/${{ github.repository }}
-  #     - run: make lint
+  lint:
+    runs-on: ubuntu-latest
+    container:
+      image: 'hairyhenderson/gomplate-ci-build:latest'
+    steps:
+      - uses: actions/checkout@v1
+      - run: make ci-lint
