@@ -32,7 +32,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func initTraceExporter(ctx context.Context, log zerolog.Logger, otlpEndpoint string) (closer func(context.Context) error, err error) {
+func initTraceExporter(ctx context.Context, otlpEndpoint string) (closer func(context.Context) error, err error) {
+	log := zerolog.Ctx(ctx)
+
 	var exporter exportTrace.SpanExporter
 	if otlpEndpoint == "" {
 		exporter, err = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
@@ -50,52 +52,72 @@ func initTraceExporter(ctx context.Context, log zerolog.Logger, otlpEndpoint str
 	return exporter.Shutdown, initTracer(exporter)
 }
 
-func main() {
-	var (
-		storagePath  string
-		hostURL      string
-		setupCode    string
-		accName      string
-		otlpEndpoint string
-		addr         string
-		debug        bool
-	)
+type opts struct {
+	hostURL      string
+	accName      string
+	otlpEndpoint string
+	debug        bool
+
+	config hc.Config
+}
+
+func parseFlags() opts {
 	const (
 		defaultPath = ""
 		usage       = "storage path for HomeControl data"
 	)
+	addr := ""
 
-	flag.StringVar(&storagePath, "path", defaultPath, usage)
-	flag.StringVar(&storagePath, "p", defaultPath, usage+" (shorthand)")
+	o := opts{}
+
+	flag.StringVar(&o.config.StoragePath, "path", defaultPath, usage)
+	flag.StringVar(&o.config.StoragePath, "p", defaultPath, usage+" (shorthand)")
 	flag.StringVar(&addr, "addr", "", "address to listen to")
-	flag.StringVar(&hostURL, "host", "", "host URL for wifi neopixel device")
-	flag.StringVar(&setupCode, "code", "12344321", "setup code")
-	flag.StringVar(&accName, "name", "WiFi NeoPixel", "accessory name")
-	flag.StringVar(&otlpEndpoint, "otlp-endpoint", "localhost:55680", "Endpoint for sending OTLP traces")
-	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
+	flag.StringVar(&o.hostURL, "host", "", "host URL for wifi neopixel device")
+	flag.StringVar(&o.config.Pin, "code", "12344321", "setup code")
+	flag.StringVar(&o.accName, "name", "WiFi NeoPixel", "accessory name")
+	flag.StringVar(&o.otlpEndpoint, "otlp-endpoint", "localhost:55680", "Endpoint for sending OTLP traces")
+	flag.BoolVar(&o.debug, "debug", false, "Enable debug logging")
 
 	flag.Parse()
 
 	parts := strings.SplitN(addr, ":", 2)
-	ip := parts[0]
-	port := ""
+	//nolint:staticcheck
+	o.config.IP = parts[0]
+	o.config.Port = ""
 	if len(parts) == 2 {
-		port = parts[1]
+		o.config.Port = parts[1]
 	}
 
-	ctx, mainCancel := context.WithCancel(context.Background())
-	defer mainCancel()
+	return o
+}
 
+func main() {
+	o := parseFlags()
+	ctx := context.Background()
 	ctx, log := initLogger(ctx)
-	if debug {
+	if o.debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		hclog.Debug.Enable()
 	}
 
-	closer, err := initTraceExporter(ctx, log, otlpEndpoint)
+	err := run(ctx, o)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to init tracing")
+		log.Fatal().Err(err).Send()
 	}
+}
+
+func run(ctx context.Context, o opts) error {
+	ctx, mainCancel := context.WithCancel(ctx)
+	defer mainCancel()
+
+	log := zerolog.Ctx(ctx)
+
+	closer, err := initTraceExporter(ctx, o.otlpEndpoint)
+	if err != nil {
+		return fmt.Errorf("failed to init tracing: %w", err)
+	}
+	//nolint:errcheck
 	defer closer(ctx)
 
 	initMetrics()
@@ -114,22 +136,22 @@ func main() {
 	defer span.End()
 
 	// lookup wifi neopixel by mDNS
-	if hostURL == "" {
-		hostURL, err = mdnsLookup(ctx, "_neopixel._tcp", "local")
+	if o.hostURL == "" {
+		o.hostURL, err = mdnsLookup(ctx, "_neopixel._tcp", "local")
 		if err != nil {
 			span.RecordError(err)
-			log.Fatal().Err(err).Send()
+			return fmt.Errorf("failed to init mDNS: %w", err)
 		}
 	}
 
-	strip, err := newWifiNeopixel(initCtx, hostURL)
+	strip, err := newWifiNeopixel(initCtx, o.hostURL)
 	if err != nil {
 		span.RecordError(err)
-		log.Fatal().Err(err).Send()
+		return fmt.Errorf("failed to init WiFiNeopixel: %w", err)
 	}
 
 	info := accessory.Info{
-		Name:         accName,
+		Name:         o.accName,
 		SerialNumber: "0123456789",
 		Model:        "a",
 		// FirmwareRevision:
@@ -139,19 +161,17 @@ func main() {
 	acc := accessory.NewColoredLightbulb(info)
 	lb := acc.Lightbulb
 
-	initLight(initCtx, lb, strip)
+	err = initLight(initCtx, lb, strip)
+	if err != nil {
+		return err
+	}
 
 	initResponders(ctx, acc, strip)
 
-	t, err := hc.NewIPTransport(hc.Config{
-		Pin:         setupCode,
-		StoragePath: storagePath,
-		IP:          ip,
-		Port:        port,
-	}, acc.Accessory)
+	t, err := hc.NewIPTransport(o.config, acc.Accessory)
 	if err != nil {
 		span.RecordError(err)
-		log.Fatal().Err(err).Send()
+		return fmt.Errorf("failed to create transport: %w", err)
 	}
 
 	c := make(chan os.Signal)
@@ -172,13 +192,14 @@ func main() {
 	// End the init span before we start the HC transport
 	span.End()
 
-	log.Info().Msgf("starting up '%s'. setup code is %s", accName, setupCode)
+	log.Info().Msgf("starting up '%s'. setup code is %s", o.accName, o.config.Pin)
 	t.Start()
+	return nil
 }
 
 func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 	log := zerolog.Ctx(ctx)
-	ctx, span := otel.Tracer("").Start(ctx, "mDNS host lookup")
+	_, span := otel.Tracer("").Start(ctx, "mDNS host lookup")
 	defer span.End()
 
 	hostURL := ""
@@ -221,50 +242,51 @@ func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 }
 
 // initialize the HomeControl lightbulb service with the same values currently displaying on the WNP strip
-func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) {
+func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) error {
 	ctx, span := otel.Tracer("").Start(ctx, "initLight")
 	defer span.End()
-	log := zerolog.Ctx(ctx)
 
 	h, s, v, err := strip.hsv(ctx)
 	span.SetAttributes(label.Array("hsv", []float64{h, s, v}))
 	if err != nil {
 		err = fmt.Errorf("strip.hsv failed while initializing light: %w", err)
 		span.RecordError(err)
-		log.Fatal().Err(err).Send()
+		return err
 	}
 	lb.Hue.SetValue(h)
 	lb.Saturation.SetValue(s * 100)
 	lb.Brightness.SetValue(int(v * 100))
+	return nil
+}
+
+func updateColor(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineopixel) {
+	tracer := otel.Tracer("")
+	ctx, span := tracer.Start(ctx, "updateColor")
+	defer span.End()
+	log := zerolog.Ctx(ctx)
+
+	h := lb.Hue.GetValue()
+	s := lb.Saturation.GetValue() / 100
+	v := float64(lb.Brightness.GetValue()) / 100
+
+	span.SetAttributes(
+		label.Float64("hue", h),
+		label.Float64("sat", s),
+		label.Float64("val", v),
+	)
+
+	log.Debug().Float64("hue", h).Float64("sat", s).Float64("val", v).Msg("updateColor")
+	c := colorful.Hsv(h, s, v)
+	if err := strip.setSolid(ctx, c); err != nil {
+		err = fmt.Errorf("updateColor failed: %w", err)
+		log.Error().Err(err).Send()
+		span.RecordError(err)
+	}
 }
 
 func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip *wifineopixel) {
 	lb := acc.Lightbulb
 	tracer := otel.Tracer("")
-
-	updateColor := func(ctx context.Context, strip *wifineopixel) {
-		ctx, span := tracer.Start(ctx, "updateColor")
-		defer span.End()
-		log := zerolog.Ctx(ctx)
-
-		h := lb.Hue.GetValue()
-		s := lb.Saturation.GetValue() / 100
-		v := float64(lb.Brightness.GetValue()) / 100
-
-		span.SetAttributes(
-			label.Float64("hue", h),
-			label.Float64("sat", s),
-			label.Float64("val", v),
-		)
-
-		log.Debug().Float64("hue", h).Float64("sat", s).Float64("val", v).Msg("updateColor")
-		c := colorful.Hsv(h, s, float64(v))
-		if err := strip.setSolid(ctx, c); err != nil {
-			err = fmt.Errorf("updateColor failed: %w", err)
-			log.Error().Err(err).Send()
-			span.RecordError(err)
-		}
-	}
 
 	log := zerolog.Ctx(ctx)
 
@@ -275,7 +297,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 
 		start := time.Now()
 		log.Debug().Float64("hue", value).Msg("Changed Hue")
-		updateColor(ctx, strip)
+		updateColor(ctx, lb, strip)
 		observeUpdateDuration("hue", "remoteUpdate", start)
 	})
 
@@ -286,7 +308,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 
 		start := time.Now()
 		log.Debug().Float64("sat", value).Msg("Changed Saturation")
-		updateColor(ctx, strip)
+		updateColor(ctx, lb, strip)
 		observeUpdateDuration("sat", "remoteUpdate", start)
 	})
 
@@ -297,7 +319,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 
 		start := time.Now()
 		log.Debug().Int("val", value).Msg("Changed Brightness")
-		updateColor(ctx, strip)
+		updateColor(ctx, lb, strip)
 		observeUpdateDuration("val", "remoteUpdate", start)
 	})
 

@@ -16,12 +16,14 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"})
 	states := []uint32{0, 0, 0, 0, 0, 0, 0, 0}
 	slock := &sync.RWMutex{}
+
 	http.HandleFunc("/clear", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/clear")
 		dump, _ := httputil.DumpRequest(r, false)
 		log.Debug().Bytes("req", dump).Msg("/clear")
 		w.WriteHeader(http.StatusOK)
 	})
+
 	http.HandleFunc("/raw", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/raw")
 		dump, _ := httputil.DumpRequest(r, false)
@@ -35,6 +37,7 @@ func main() {
 		log.Debug().Uints32("states", states).Msgf("/raw color: %v", uint32ToColor(states[0]))
 		w.WriteHeader(http.StatusOK)
 	})
+
 	http.HandleFunc("/size", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/size")
 		dump, _ := httputil.DumpRequest(r, false)
@@ -44,6 +47,7 @@ func main() {
 		_, _ = w.Write([]byte("8"))
 		w.WriteHeader(http.StatusOK)
 	})
+
 	http.HandleFunc("/states", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/states")
 		dump, _ := httputil.DumpRequest(r, false)
@@ -69,5 +73,6 @@ func uint32ToColor(u uint32) color.Color {
 		uint8(u>>0) & 255,
 		255,
 	}
+
 	return rgba
 }

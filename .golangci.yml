@@ -32,9 +32,9 @@ linters:
     - errcheck
     - exhaustive
     - exportloopref
-    - funlen
-    - gci
-    - gochecknoglobals
+    # - funlen
+    # - gci
+    # - gochecknoglobals
     - gochecknoinits
     - gocognit
     - goconst
@@ -51,7 +51,7 @@ linters:
     - goprintffuncname
     - gosec
     - gosimple
-    - govet
+    # - govet
     - ineffassign
     - interfacer
     - lll
@@ -75,4 +75,4 @@ linters:
     - unused
     - varcheck
     - whitespace
-    - wsl
+    # - wsl

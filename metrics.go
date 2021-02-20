@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-
 	"time"
 
 	"github.com/povilasv/prommod"
