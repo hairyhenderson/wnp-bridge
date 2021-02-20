@@ -11,3 +11,16 @@ docker: Dockerfile
 		--platform linux/arm64 \
 		--push \
 		--tag hairyhenderson/wnp-bridge .
+
+test:
+	@go test -v -race -coverprofile=c.out ./...
+
+lint:
+	@golangci-lint run --verbose --max-same-issues=0 --max-issues-per-linter=0
+
+ci-lint:
+	@golangci-lint run --verbose --max-same-issues=0 --max-issues-per-linter=0 --out-format=github-actions
+
+.PHONY: test lint ci-lint
+.DELETE_ON_ERROR:
+.SECONDARY:

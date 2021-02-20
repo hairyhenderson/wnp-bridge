@@ -258,12 +258,14 @@ func (w *wifineopixel) getStates(ctx context.Context) ([]colorful.Color, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	log.Debug().Msgf("GET /states = %v", states)
 
 	c := make([]colorful.Color, len(states))
 	for i, s := range states {
 		c[i] = uint32ToColor(s)
 	}
+
 	log.Debug().Msgf("uint32ToColor(%v) = %v", states[0], c[0])
 
 	return c, nil
@@ -293,6 +295,7 @@ func colorsToUint32(c []colorful.Color) []uint32 {
 	for i := range c {
 		u[i] = colorToUint32(c[i])
 	}
+
 	return u
 }
 
@@ -306,5 +309,6 @@ func uint32ToColor(u uint32) colorful.Color {
 		// uint8(u>>24) & 255,
 	}
 	c, _ := colorful.MakeColor(rgba)
+
 	return c
 }
