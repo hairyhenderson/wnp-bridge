@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/attribute"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -24,10 +24,10 @@ func tagsFromRequest(span trace.Span, r *http.Request) {
 		return
 	}
 
-	hdrLabels := make([]label.KeyValue, len(r.Header))
+	hdrLabels := make([]attribute.KeyValue, len(r.Header))
 	i := 0
 	for k, h := range r.Header {
-		hdrLabels[i] = label.String(tagHTTPRequestHeader(k), strings.Join(h, "\n"))
+		hdrLabels[i] = attribute.String(tagHTTPRequestHeader(k), strings.Join(h, "\n"))
 		i++
 	}
 	span.SetAttributes(hdrLabels...)
@@ -39,10 +39,10 @@ func tagsFromResponse(span trace.Span, r *http.Response) {
 		return
 	}
 
-	hdrLabels := make([]label.KeyValue, len(r.Header))
+	hdrLabels := make([]attribute.KeyValue, len(r.Header))
 	i := 0
 	for k, h := range r.Header {
-		hdrLabels[i] = label.String(tagHTTPResponseHeader(k), strings.Join(h, "\n"))
+		hdrLabels[i] = attribute.String(tagHTTPResponseHeader(k), strings.Join(h, "\n"))
 		i++
 	}
 	span.SetAttributes(hdrLabels...)
@@ -72,7 +72,7 @@ func initTracer(exporter exportTrace.SpanExporter) error {
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.ServiceNameKey.String("wnp-bridge"),
 			semconv.ServiceInstanceIDKey.String(hostname),
-			label.String("module.path", module),
+			attribute.String("module.path", module),
 			semconv.ServiceVersionKey.String(version),
 		)),
 	)

@@ -5,17 +5,16 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
 	"go.opentelemetry.io/otel/exporters/stdout"
-	"go.opentelemetry.io/otel/label"
 	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/trace"
 
@@ -108,8 +107,8 @@ func main() {
 }
 
 func run(ctx context.Context, o opts) error {
-	ctx, mainCancel := context.WithCancel(ctx)
-	defer mainCancel()
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
 	log := zerolog.Ctx(ctx)
 
@@ -174,19 +173,10 @@ func run(ctx context.Context, o opts) error {
 		return fmt.Errorf("failed to create transport: %w", err)
 	}
 
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, syscall.SIGTERM)
-
 	go func(ctx context.Context) {
-		select {
-		case sig := <-c:
-			zerolog.Ctx(ctx).Error().Stringer("signal", sig).Msg("terminating due to signal")
-			<-t.Stop()
-		case <-ctx.Done():
-			zerolog.Ctx(ctx).Error().Err(ctx.Err()).Msg("context done")
-			<-t.Stop()
-		}
+		<-ctx.Done()
+		zerolog.Ctx(ctx).Error().Err(ctx.Err()).Msg("context done")
+		<-t.Stop()
 	}(ctx)
 
 	// End the init span before we start the HC transport
@@ -213,10 +203,10 @@ func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 				log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
 				span.AddEvent("mDNS: got entry",
 					trace.WithAttributes(
-						label.String("entry.host", entry.Host),
-						label.String("entry.name", entry.Name),
-						label.Stringer("entry.addr", entry.Addr),
-						label.Int("entry.port", entry.Port),
+						attribute.String("entry.host", entry.Host),
+						attribute.String("entry.name", entry.Name),
+						attribute.Stringer("entry.addr", entry.Addr),
+						attribute.Int("entry.port", entry.Port),
 					))
 				hostURL = "http://" + entry.Addr.String()
 			}
@@ -247,7 +237,7 @@ func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineo
 	defer span.End()
 
 	h, s, v, err := strip.hsv(ctx)
-	span.SetAttributes(label.Array("hsv", []float64{h, s, v}))
+	span.SetAttributes(attribute.Array("hsv", []float64{h, s, v}))
 	if err != nil {
 		err = fmt.Errorf("strip.hsv failed while initializing light: %w", err)
 		span.RecordError(err)
@@ -270,9 +260,9 @@ func updateColor(ctx context.Context, lb *service.ColoredLightbulb, strip *wifin
 	v := float64(lb.Brightness.GetValue()) / 100
 
 	span.SetAttributes(
-		label.Float64("hue", h),
-		label.Float64("sat", s),
-		label.Float64("val", v),
+		attribute.Float64("hue", h),
+		attribute.Float64("sat", s),
+		attribute.Float64("val", v),
 	)
 
 	log.Debug().Float64("hue", h).Float64("sat", s).Float64("val", v).Msg("updateColor")
@@ -293,7 +283,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.Hue.OnValueRemoteUpdate(func(value float64) {
 		ctx, span := tracer.Start(ctx, "lb.Hue.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttributes(label.Float64("value", value))
+		span.SetAttributes(attribute.Float64("value", value))
 
 		start := time.Now()
 		log.Debug().Float64("hue", value).Msg("Changed Hue")
@@ -304,7 +294,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.Saturation.OnValueRemoteUpdate(func(value float64) {
 		ctx, span := tracer.Start(ctx, "lb.Saturation.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttributes(label.Float64("value", value))
+		span.SetAttributes(attribute.Float64("value", value))
 
 		start := time.Now()
 		log.Debug().Float64("sat", value).Msg("Changed Saturation")
@@ -315,7 +305,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.Brightness.OnValueRemoteUpdate(func(value int) {
 		ctx, span := tracer.Start(ctx, "lb.Brightness.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttributes(label.Int("value", value))
+		span.SetAttributes(attribute.Int("value", value))
 
 		start := time.Now()
 		log.Debug().Int("val", value).Msg("Changed Brightness")
@@ -337,7 +327,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 	lb.On.OnValueRemoteUpdate(func(on bool) {
 		ctx, span := tracer.Start(ctx, "lb.On.OnValueRemoteUpdate")
 		defer span.End()
-		span.SetAttributes(label.Bool("value", on))
+		span.SetAttributes(attribute.Bool("value", on))
 
 		start := time.Now()
 		log.Debug().Bool("on", on).Msg("lb.On.OnValueRemoteUpdate")
