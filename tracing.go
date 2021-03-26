@@ -63,11 +63,6 @@ func initTracer(exporter exportTrace.SpanExporter) error {
 		// sum = bi.Main.Sum
 	}
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithConfig(
-			sdktrace.Config{
-				DefaultSampler: sdktrace.AlwaysSample(),
-			},
-		),
 		sdktrace.WithSyncer(exporter),
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.ServiceNameKey.String("wnp-bridge"),
