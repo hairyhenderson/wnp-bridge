@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/brutella/hc v1.2.4
-	github.com/hashicorp/mdns v1.0.3
+	github.com/hashicorp/mdns v1.0.4
 	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/povilasv/prommod v0.0.12
 	github.com/prometheus/client_golang v1.10.0
