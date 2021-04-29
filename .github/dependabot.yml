@@ -7,45 +7,6 @@ updates:
     time: "02:00"
     timezone: Canada/Eastern
   open-pull-requests-limit: 10
-  ignore:
-  - dependency-name: github.com/rs/zerolog
-    versions:
-    - 1.21.0
-  - dependency-name: go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace
-    versions:
-    - 0.17.0
-    - 0.18.0
-    - 0.19.0
-  - dependency-name: go.opentelemetry.io/otel/sdk
-    versions:
-    - 0.17.0
-    - 0.18.0
-    - 0.19.0
-  - dependency-name: go.opentelemetry.io/otel/exporters/stdout
-    versions:
-    - 0.17.0
-    - 0.18.0
-    - 0.19.0
-  - dependency-name: go.opentelemetry.io/otel/trace
-    versions:
-    - 0.18.0
-    - 0.19.0
-  - dependency-name: go.opentelemetry.io/otel
-    versions:
-    - 0.17.0
-    - 0.18.0
-    - 0.19.0
-  - dependency-name: go.opentelemetry.io/otel/exporters/otlp
-    versions:
-    - 0.17.0
-    - 0.18.0
-    - 0.19.0
-  - dependency-name: github.com/prometheus/client_golang
-    versions:
-    - 1.10.0
-  - dependency-name: github.com/brutella/hc
-    versions:
-    - 1.2.4
 - package-ecosystem: docker
   directory: "/"
   schedule:
