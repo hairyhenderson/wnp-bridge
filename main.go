@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
 	"go.opentelemetry.io/otel/exporters/stdout"
-	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/hashicorp/mdns"
@@ -34,7 +34,7 @@ import (
 func initTraceExporter(ctx context.Context, otlpEndpoint string) (closer func(context.Context) error, err error) {
 	log := zerolog.Ctx(ctx)
 
-	var exporter exportTrace.SpanExporter
+	var exporter sdktrace.SpanExporter
 	if otlpEndpoint == "" {
 		exporter, err = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
 		if err != nil {

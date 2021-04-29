@@ -9,7 +9,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	exportTrace "go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/semconv"
@@ -50,7 +49,7 @@ func tagsFromResponse(span trace.Span, r *http.Response) {
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(r.StatusCode)...)
 }
 
-func initTracer(exporter exportTrace.SpanExporter) error {
+func initTracer(exporter sdktrace.SpanExporter) error {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return fmt.Errorf("failed to lookup hostname: %w", err)
