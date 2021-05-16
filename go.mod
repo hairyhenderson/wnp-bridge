@@ -15,5 +15,5 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout v0.20.0
 	go.opentelemetry.io/otel/sdk v0.20.0
 	go.opentelemetry.io/otel/trace v0.20.0
-	golang.org/x/term v0.0.0-20210429154555-c04ba851c2a4
+	golang.org/x/term v0.0.0-20210503060354-a79de5458b56
 )
