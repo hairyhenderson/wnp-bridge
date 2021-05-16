@@ -55,9 +55,8 @@ type opts struct {
 	hostURL      string
 	accName      string
 	otlpEndpoint string
+	config       hc.Config
 	debug        bool
-
-	config hc.Config
 }
 
 func parseFlags() opts {

@@ -1,7 +1,8 @@
 linters-settings:
   govet:
     check-shadowing: true
-    enable-all: true
+    enable:
+      - fieldalignment
   golint:
     min-confidence: 0
   gocyclo:
@@ -61,7 +62,6 @@ linters:
     - nolintlint
     - prealloc
     - rowserrcheck
-    - scopelint
     - sqlclosecheck
     - staticcheck
     - structcheck
