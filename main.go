@@ -74,7 +74,7 @@ func parseFlags() opts {
 	flag.StringVar(&o.hostURL, "host", "", "host URL for wifi neopixel device")
 	flag.StringVar(&o.config.Pin, "code", "12344321", "setup code")
 	flag.StringVar(&o.accName, "name", "WiFi NeoPixel", "accessory name")
-	flag.StringVar(&o.otlpEndpoint, "otlp-endpoint", "localhost:55680", "Endpoint for sending OTLP traces")
+	flag.StringVar(&o.otlpEndpoint, "otlp-endpoint", "127.0.0.1:55680", "Endpoint for sending OTLP traces")
 	flag.BoolVar(&o.debug, "debug", false, "Enable debug logging")
 
 	flag.Parse()
