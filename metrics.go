@@ -6,6 +6,7 @@ import (
 
 	"github.com/povilasv/prommod"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -19,7 +20,7 @@ var (
 
 func initMetrics() {
 	ns := "wnp_bridge"
-	prometheus.MustRegister(prommod.NewCollector(ns), prometheus.NewBuildInfoCollector())
+	prometheus.MustRegister(prommod.NewCollector(ns), collectors.NewBuildInfoCollector())
 
 	// hue: Hue, sat: Saturation, val: Value/Brightness, on: On, acc: Accessory (identify event)
 	for _, sub := range []string{"hue", "sat", "val", "on", "acc"} {
