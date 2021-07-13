@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.2.1-labs
-FROM golang:1.16.5-alpine AS build
+FROM golang:1.16.6-alpine AS build
 
 ARG TARGETOS
 ARG TARGETARCH
