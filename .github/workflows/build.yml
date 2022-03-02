@@ -10,7 +10,7 @@ jobs:
       - run: |
           git config --global user.email "bogus@example.com"
           git config --global user.name "Someone"
-      - uses: actions/checkout@v2.4.0
+      - uses: actions/checkout@v3
       - run: CGO_ENABLED=0 go build
       - run: go test
   lint:
@@ -18,5 +18,5 @@ jobs:
     container:
       image: 'hairyhenderson/gomplate-ci-build:latest'
     steps:
-      - uses: actions/checkout@v2.4.0
+      - uses: actions/checkout@v3
       - run: make ci-lint
