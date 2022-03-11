@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -23,10 +24,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/brutella/hc"
-	"github.com/brutella/hc/accessory"
-	hclog "github.com/brutella/hc/log"
-	"github.com/brutella/hc/service"
+	"github.com/brutella/hap"
+	"github.com/brutella/hap/accessory"
+	hclog "github.com/brutella/hap/log"
+	"github.com/brutella/hap/service"
 
 	"github.com/rs/zerolog"
 )
@@ -55,7 +56,9 @@ type opts struct {
 	hostURL      string
 	accName      string
 	otlpEndpoint string
-	config       hc.Config
+	storagePath  string
+	pin          string
+	addr         string
 	debug        bool
 }
 
@@ -64,28 +67,19 @@ func parseFlags() opts {
 		defaultPath = ""
 		usage       = "storage path for HomeControl data"
 	)
-	addr := ""
 
 	o := opts{}
 
-	flag.StringVar(&o.config.StoragePath, "path", defaultPath, usage)
-	flag.StringVar(&o.config.StoragePath, "p", defaultPath, usage+" (shorthand)")
-	flag.StringVar(&addr, "addr", "", "address to listen to")
+	flag.StringVar(&o.storagePath, "path", defaultPath, usage)
+	flag.StringVar(&o.storagePath, "p", defaultPath, usage+" (shorthand)")
+	flag.StringVar(&o.addr, "addr", "", "address to listen to")
 	flag.StringVar(&o.hostURL, "host", "", "host URL for wifi neopixel device")
-	flag.StringVar(&o.config.Pin, "code", "12344321", "setup code")
+	flag.StringVar(&o.pin, "code", "12344321", "setup code")
 	flag.StringVar(&o.accName, "name", "WiFi NeoPixel", "accessory name")
 	flag.StringVar(&o.otlpEndpoint, "otlp-endpoint", "127.0.0.1:55680", "Endpoint for sending OTLP traces")
 	flag.BoolVar(&o.debug, "debug", false, "Enable debug logging")
 
 	flag.Parse()
-
-	parts := strings.SplitN(addr, ":", 2)
-	//nolint:staticcheck
-	o.config.IP = parts[0]
-	o.config.Port = ""
-	if len(parts) == 2 {
-		o.config.Port = parts[1]
-	}
 
 	return o
 }
@@ -166,24 +160,25 @@ func run(ctx context.Context, o opts) error {
 
 	initResponders(ctx, acc, strip)
 
-	t, err := hc.NewIPTransport(o.config, acc.Accessory)
+	store := hap.NewFsStore(o.storagePath)
+
+	t, err := hap.NewServer(store, acc.A)
 	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("failed to create transport: %w", err)
 	}
 
-	go func(ctx context.Context) {
-		<-ctx.Done()
-		zerolog.Ctx(ctx).Error().Err(ctx.Err()).Msg("context done")
-		<-t.Stop()
-	}(ctx)
+	t.Pin = o.pin
+	t.Addr = o.addr
+
+	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	// End the init span before we start the HC transport
 	span.End()
 
-	log.Info().Msgf("starting up '%s'. setup code is %s", o.accName, o.config.Pin)
-	t.Start()
-	return nil
+	log.Info().Msgf("starting up '%s'. setup code is %s", o.accName, o.pin)
+	return t.ListenAndServe(ctx)
 }
 
 func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
@@ -244,7 +239,7 @@ func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineo
 	}
 	lb.Hue.SetValue(h)
 	lb.Saturation.SetValue(s * 100)
-	lb.Brightness.SetValue(int(v * 100))
+	_ = lb.Brightness.SetValue(int(v * 100))
 	return nil
 }
 
@@ -254,9 +249,9 @@ func updateColor(ctx context.Context, lb *service.ColoredLightbulb, strip *wifin
 	defer span.End()
 	log := zerolog.Ctx(ctx)
 
-	h := lb.Hue.GetValue()
-	s := lb.Saturation.GetValue() / 100
-	v := float64(lb.Brightness.GetValue()) / 100
+	h := lb.Hue.Value()
+	s := lb.Saturation.Value() / 100
+	v := float64(lb.Brightness.Value()) / 100
 
 	span.SetAttributes(
 		attribute.Float64("hue", h),
@@ -312,16 +307,17 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 		observeUpdateDuration("val", "remoteUpdate", start)
 	})
 
-	lb.On.OnValueRemoteGet(func() bool {
-		_, span := tracer.Start(ctx, "lb.On.OnValueRemoteGet")
+	lb.On.ValueRequestFunc = func(r *http.Request) (interface{}, int) {
+		_, span := tracer.Start(ctx, "lb.On.ValueRequest")
 		defer span.End()
 
 		start := time.Now()
-		log.Debug().Msg("lb.On.OnValueRemoteGet()")
+		log.Debug().Msg("lb.On.ValueRequest()")
 		isOn := strip.isOn()
 		observeUpdateDuration("on", "remoteGet", start)
-		return isOn
-	})
+
+		return isOn, 0
+	}
 
 	lb.On.OnValueRemoteUpdate(func(on bool) {
 		ctx, span := tracer.Start(ctx, "lb.On.OnValueRemoteUpdate")
@@ -343,7 +339,7 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 		observeUpdateDuration("on", "remoteUpdate", start)
 	})
 
-	acc.OnIdentify(func() {
+	acc.IdentifyFunc = func(r *http.Request) {
 		ctx, span := tracer.Start(ctx, "acc.OnIdentify")
 		defer span.End()
 
@@ -381,5 +377,5 @@ func initResponders(ctx context.Context, acc *accessory.ColoredLightbulb, strip 
 			}
 		}
 		observeUpdateDuration("acc", "identify", start)
-	})
+	}
 }
