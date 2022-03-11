@@ -13,9 +13,8 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
-	"go.opentelemetry.io/otel/exporters/stdout"
+	otlpgrpc "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
@@ -37,19 +36,18 @@ func initTraceExporter(ctx context.Context, otlpEndpoint string) (closer func(co
 
 	var exporter sdktrace.SpanExporter
 	if otlpEndpoint == "" {
-		exporter, err = stdout.NewExporter(stdout.WithWriter(log), stdout.WithPrettyPrint())
+		exporter, err = stdouttrace.New(stdouttrace.WithWriter(log), stdouttrace.WithPrettyPrint())
 		if err != nil {
 			return nil, fmt.Errorf("failed to init stdout exporter: %w", err)
 		}
 	} else {
-		driver := otlpgrpc.NewDriver(otlpgrpc.WithEndpoint(otlpEndpoint), otlpgrpc.WithInsecure())
-		exporter, err = otlp.NewExporter(ctx, driver)
+		exporter, err = otlpgrpc.New(ctx, otlpgrpc.WithEndpoint(otlpEndpoint), otlpgrpc.WithInsecure())
 		if err != nil {
 			return nil, fmt.Errorf("failed to init OTLP exporter: %w", err)
 		}
 	}
 
-	return exporter.Shutdown, initTracer(exporter)
+	return exporter.Shutdown, initTracer(ctx, exporter)
 }
 
 type opts struct {
@@ -231,7 +229,7 @@ func initLight(ctx context.Context, lb *service.ColoredLightbulb, strip *wifineo
 	defer span.End()
 
 	h, s, v, err := strip.hsv(ctx)
-	span.SetAttributes(attribute.Array("hsv", []float64{h, s, v}))
+	span.SetAttributes(attribute.Float64Slice("hsv", []float64{h, s, v}))
 	if err != nil {
 		err = fmt.Errorf("strip.hsv failed while initializing light: %w", err)
 		span.RecordError(err)

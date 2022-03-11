@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/semconv"
+	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -49,7 +50,7 @@ func tagsFromResponse(span trace.Span, r *http.Response) {
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(r.StatusCode)...)
 }
 
-func initTracer(exporter sdktrace.SpanExporter) error {
+func initTracer(ctx context.Context, exporter sdktrace.SpanExporter) error {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return fmt.Errorf("failed to lookup hostname: %w", err)
@@ -61,14 +62,19 @@ func initTracer(exporter sdktrace.SpanExporter) error {
 		module = bi.Main.Path
 		// sum = bi.Main.Sum
 	}
+	res, err := resource.New(ctx, resource.WithAttributes(
+		semconv.ServiceNameKey.String("wnp-bridge"),
+		semconv.ServiceInstanceIDKey.String(hostname),
+		attribute.String("module.path", module),
+		semconv.ServiceVersionKey.String(version),
+	))
+	if err != nil {
+		return fmt.Errorf("failed to create resource: %w", err)
+	}
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithSyncer(exporter),
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.ServiceNameKey.String("wnp-bridge"),
-			semconv.ServiceInstanceIDKey.String(hostname),
-			attribute.String("module.path", module),
-			semconv.ServiceVersionKey.String(version),
-		)),
+		sdktrace.WithResource(res),
 	)
 	otel.SetTracerProvider(tp)
 	return nil

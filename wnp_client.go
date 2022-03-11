@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image/color"
 	"io"
 	"net"
@@ -169,7 +170,7 @@ func (w *wifineopixel) on(ctx context.Context) error {
 func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) error {
 	ctx, span := otel.Tracer("").Start(ctx, "setState")
 	defer span.End()
-	span.SetAttributes(attribute.Array("state", state))
+	span.SetAttributes(attribute.String("state", fmt.Sprintf("%v", state)))
 
 	if _, _, v := state[0].Hsv(); v > 0 && w.isOn() {
 		w.onState = w.state
