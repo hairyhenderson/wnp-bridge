@@ -19,7 +19,7 @@ RUN --mount=type=cache,id=go-build-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},tar
     --mount=type=cache,id=go-pkg-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},target=/go/pkg \
         CGOENABLED=0 go build -o /bin/wnp-bridge
 
-FROM alpine:3.15.0 AS runtime
+FROM alpine:3.15.1 AS runtime
 
 COPY --from=build /bin/wnp-bridge /bin/wnp-bridge
 
