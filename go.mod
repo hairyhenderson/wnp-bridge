@@ -3,8 +3,7 @@ module github.com/hairyhenderson/wnp-bridge
 go 1.16
 
 require (
-	github.com/brutella/dnssd v1.2.2 // indirect
-	github.com/brutella/hap v0.0.15
+	github.com/brutella/hap v0.0.16
 	github.com/hashicorp/mdns v1.0.5
 	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/povilasv/prommod v0.0.12
