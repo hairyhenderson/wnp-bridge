@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"image/color"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -124,7 +123,7 @@ func (w *wifineopixel) clear(ctx context.Context) error {
 		resp.Body.Close()
 		return err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return err
@@ -154,7 +153,7 @@ func (w *wifineopixel) on(ctx context.Context) error {
 		resp.Body.Close()
 		return err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return err
@@ -189,7 +188,7 @@ func (w *wifineopixel) setState(ctx context.Context, state []colorful.Color) err
 		return err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	log.Debug().Msgf("setState: %v", string(body))
 	return err
 }
