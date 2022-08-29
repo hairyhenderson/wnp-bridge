@@ -8,7 +8,7 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/povilasv/prommod v0.0.12
 	github.com/prometheus/client_golang v1.13.0
-	github.com/rs/zerolog v1.27.0
+	github.com/rs/zerolog v1.28.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.34.0
 	go.opentelemetry.io/otel v1.9.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.9.0
