@@ -57,6 +57,7 @@ type opts struct {
 	storagePath  string
 	pin          string
 	addr         string
+	metricsAddr  string
 	debug        bool
 }
 
@@ -71,6 +72,7 @@ func parseFlags() opts {
 	flag.StringVar(&o.storagePath, "path", defaultPath, usage)
 	flag.StringVar(&o.storagePath, "p", defaultPath, usage+" (shorthand)")
 	flag.StringVar(&o.addr, "addr", "", "address to listen to")
+	flag.StringVar(&o.metricsAddr, "metrics-addr", ":8080", "address to listen to for metrics")
 	flag.StringVar(&o.hostURL, "host", "", "host URL for wifi neopixel device")
 	flag.StringVar(&o.pin, "code", "12344321", "setup code")
 	flag.StringVar(&o.accName, "name", "WiFi NeoPixel", "accessory name")
@@ -111,10 +113,17 @@ func run(ctx context.Context, o opts) error {
 	defer closer(ctx)
 
 	initMetrics()
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	srv := &http.Server{
+		Addr:              o.metricsAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 2 * time.Second,
+	}
+
 	go func() {
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe(":8080", mux); err != nil {
+		if err := srv.ListenAndServe(); err != nil {
 			log.Error().Err(err).Send()
 		}
 	}()

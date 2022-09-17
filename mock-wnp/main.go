@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -17,14 +18,15 @@ func main() {
 	states := []uint32{0, 0, 0, 0, 0, 0, 0, 0}
 	slock := &sync.RWMutex{}
 
-	http.HandleFunc("/clear", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/clear", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/clear")
 		dump, _ := httputil.DumpRequest(r, false)
 		log.Debug().Bytes("req", dump).Msg("/clear")
 		w.WriteHeader(http.StatusOK)
 	})
 
-	http.HandleFunc("/raw", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/raw", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/raw")
 		dump, _ := httputil.DumpRequest(r, false)
 		log.Debug().Bytes("req", dump).Msg("/raw")
@@ -38,7 +40,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	http.HandleFunc("/size", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/size", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/size")
 		dump, _ := httputil.DumpRequest(r, false)
 		log.Debug().Bytes("req", dump).Msg("/size")
@@ -48,7 +50,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	http.HandleFunc("/states", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/states", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("/states")
 		dump, _ := httputil.DumpRequest(r, false)
 		log.Debug().Bytes("req", dump).Msg("/states")
@@ -61,7 +63,11 @@ func main() {
 		_ = e.Encode(states)
 	})
 
-	if err := http.ListenAndServe(":8888", nil); err != nil {
+	srv := &http.Server{
+		Addr: ":8888", Handler: mux, ReadHeaderTimeout: 2 * time.Second,
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
 		log.Error().Err(err).Send()
 	}
 }
