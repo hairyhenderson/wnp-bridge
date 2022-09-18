@@ -73,7 +73,7 @@ func initTracer(ctx context.Context, exporter sdktrace.SpanExporter) error {
 	}
 
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSyncer(exporter),
+		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
 	)
 	otel.SetTracerProvider(tp)
