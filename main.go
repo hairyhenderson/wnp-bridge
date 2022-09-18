@@ -18,16 +18,12 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/hashicorp/mdns"
-	"github.com/lucasb-eyer/go-colorful"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/brutella/hap"
 	"github.com/brutella/hap/accessory"
-	hclog "github.com/brutella/hap/log"
 	"github.com/brutella/hap/service"
-
+	"github.com/hashicorp/mdns"
+	"github.com/lucasb-eyer/go-colorful"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 )
 
@@ -58,6 +54,7 @@ type opts struct {
 	pin          string
 	addr         string
 	metricsAddr  string
+	enableIPv6   bool
 	debug        bool
 }
 
@@ -77,6 +74,7 @@ func parseFlags() opts {
 	flag.StringVar(&o.pin, "code", "12344321", "setup code")
 	flag.StringVar(&o.accName, "name", "WiFi NeoPixel", "accessory name")
 	flag.StringVar(&o.otlpEndpoint, "otlp-endpoint", "127.0.0.1:55680", "Endpoint for sending OTLP traces")
+	flag.BoolVar(&o.enableIPv6, "enable-ipv6", false, "enable IPv6")
 	flag.BoolVar(&o.debug, "debug", false, "Enable debug logging")
 
 	flag.Parse()
@@ -86,16 +84,14 @@ func parseFlags() opts {
 
 func main() {
 	o := parseFlags()
-	ctx := context.Background()
-	ctx, log := initLogger(ctx)
-	if o.debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		hclog.Debug.Enable()
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	ctx, log := initLogger(ctx, o.debug)
 
 	err := run(ctx, o)
 	if err != nil {
-		log.Fatal().Err(err).Send()
+		log.Error().Err(err).Msg("exiting with error")
 	}
 }
 
@@ -111,6 +107,8 @@ func run(ctx context.Context, o opts) error {
 	}
 	//nolint:errcheck
 	defer closer(ctx)
+
+	log.Debug().Msg("starting")
 
 	initMetrics()
 
@@ -136,7 +134,7 @@ func run(ctx context.Context, o opts) error {
 
 	// lookup wifi neopixel by mDNS
 	if o.hostURL == "" {
-		o.hostURL, err = mdnsLookup(ctx, "_neopixel._tcp", "local")
+		o.hostURL, err = mdnsLookup(ctx, "_neopixel._tcp", "local", o.enableIPv6)
 		if err != nil {
 			span.RecordError(err)
 			return fmt.Errorf("failed to init mDNS: %w", err)
@@ -184,11 +182,12 @@ func run(ctx context.Context, o opts) error {
 	// End the init span before we start the HC transport
 	span.End()
 
-	log.Info().Msgf("starting up '%s'. setup code is %s", o.accName, o.pin)
+	log.Info().Str("accessory", o.accName).Str("setup_code", o.pin).Msg("starting up")
+
 	return t.ListenAndServe(ctx)
 }
 
-func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
+func mdnsLookup(ctx context.Context, svc, domain string, enableIPv6 bool) (string, error) {
 	log := zerolog.Ctx(ctx)
 	_, span := otel.Tracer("").Start(ctx, "mDNS host lookup")
 	defer span.End()
@@ -199,17 +198,26 @@ func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 	// Make a channel for results and start listening
 	entriesCh := make(chan *mdns.ServiceEntry, 4)
 	go func() {
-		for entry := range entriesCh {
-			if strings.HasSuffix(entry.Name, suffix) {
-				log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
-				span.AddEvent("mDNS: got entry",
-					trace.WithAttributes(
-						attribute.String("entry.host", entry.Host),
-						attribute.String("entry.name", entry.Name),
-						attribute.Stringer("entry.addr", entry.Addr),
-						attribute.Int("entry.port", entry.Port),
-					))
-				hostURL = "http://" + entry.Addr.String()
+		for {
+			select {
+			case entry, ok := <-entriesCh:
+				if !ok {
+					return
+				}
+
+				if strings.HasSuffix(entry.Name, suffix) {
+					log.Info().Str("host", entry.Host).Str("name", entry.Name).IPAddr("addr", entry.Addr).Int("port", entry.Port).Msg("found neopixel")
+					span.AddEvent("mDNS: got entry",
+						trace.WithAttributes(
+							attribute.String("entry.host", entry.Host),
+							attribute.String("entry.name", entry.Name),
+							attribute.Stringer("entry.addr", entry.Addr),
+							attribute.Int("entry.port", entry.Port),
+						))
+					hostURL = "http://" + entry.Addr.String()
+				}
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
@@ -221,6 +229,7 @@ func mdnsLookup(ctx context.Context, svc, domain string) (string, error) {
 		Service:             svc,
 		Entries:             entriesCh,
 		WantUnicastResponse: true,
+		DisableIPv6:         !enableIPv6,
 	}
 	err := mdns.Query(opts)
 	close(entriesCh)
