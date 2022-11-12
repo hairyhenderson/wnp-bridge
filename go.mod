@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/mdns v1.0.5
 	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/povilasv/prommod v0.0.12
-	github.com/prometheus/client_golang v1.13.1
+	github.com/prometheus/client_golang v1.14.0
 	github.com/rs/zerolog v1.28.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.36.4
 	go.opentelemetry.io/otel v1.11.1
@@ -33,7 +33,7 @@ require (
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/miekg/dns v1.1.50 // indirect
-	github.com/prometheus/client_model v0.2.0 // indirect
+	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/tadglines/go-pkgs v0.0.0-20210623144937-b983b20f54f9 // indirect
