@@ -3,7 +3,7 @@ module github.com/hairyhenderson/wnp-bridge
 go 1.19
 
 require (
-	github.com/brutella/hap v0.0.20
+	github.com/brutella/hap v0.0.21
 	github.com/go-logr/zerologr v1.2.2
 	github.com/hashicorp/mdns v1.0.5
 	github.com/lucasb-eyer/go-colorful v1.2.0
@@ -21,7 +21,7 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/brutella/dnssd v1.2.4 // indirect
+	github.com/brutella/dnssd v1.2.5 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/go-chi/chi v1.5.4 // indirect
