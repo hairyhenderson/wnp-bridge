@@ -3,7 +3,7 @@ module github.com/hairyhenderson/wnp-bridge
 go 1.19
 
 require (
-	github.com/brutella/hap v0.0.21
+	github.com/brutella/hap v0.0.22
 	github.com/go-logr/zerologr v1.2.2
 	github.com/hashicorp/mdns v1.0.5
 	github.com/lucasb-eyer/go-colorful v1.2.0
