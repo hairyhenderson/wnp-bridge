@@ -41,10 +41,10 @@ github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
-github.com/brutella/dnssd v1.2.6 h1:/0P13JkHLRzeLQkWRPEn4hJCr4T3NfknIFw3aNPIC34=
-github.com/brutella/dnssd v1.2.6/go.mod h1:JoW2sJUrmVIef25G6lrLj7HS6Xdwh6q8WUIvMkkBYXs=
-github.com/brutella/hap v0.0.25 h1:QUAX1m+H5/fGVSOO4v71GR7sePTp291GY88laee97rI=
-github.com/brutella/hap v0.0.25/go.mod h1:jq5zNqV0/sUSWnYQ9hBUDDXGfBiZJm1TtnptNw02PfI=
+github.com/brutella/dnssd v1.2.7 h1:Uq2NgLzlUz5JWIzcug9xRU6v0UApHrlxbsREA5B1RrY=
+github.com/brutella/dnssd v1.2.7/go.mod h1:JoW2sJUrmVIef25G6lrLj7HS6Xdwh6q8WUIvMkkBYXs=
+github.com/brutella/hap v0.0.26 h1:oq94vhJ5Z3SoiwmvA+zShF/Q1Zivl5I2JSW/+c3pyBg=
+github.com/brutella/hap v0.0.26/go.mod h1:ilKzdnapk5SjRrhedSW1+IMlMCt5P4hR91jlIap33x4=
 github.com/cenkalti/backoff/v4 v4.2.1 h1:y4OZtCnogmCPw98Zjyt5a6+QwPLGkiQsYW5oUqylYbM=
 github.com/cenkalti/backoff/v4 v4.2.1/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
