@@ -16,7 +16,7 @@ jobs:
       - run: |
           git config --global user.email "bogus@example.com"
           git config --global user.name "Someone"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: go build
       - run: go test
   lint:
@@ -24,5 +24,5 @@ jobs:
     container:
       image: ghcr.io/hairyhenderson/gomplate-ci-build:latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: make ci-lint
