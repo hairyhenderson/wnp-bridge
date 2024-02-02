@@ -3,7 +3,7 @@ module github.com/hairyhenderson/wnp-bridge
 go 1.21
 
 require (
-	github.com/brutella/hap v0.0.28
+	github.com/brutella/hap v0.0.29
 	github.com/go-logr/zerologr v1.2.3
 	github.com/hashicorp/mdns v1.0.5
 	github.com/lucasb-eyer/go-colorful v1.2.0
@@ -51,4 +51,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/grpc v1.60.1 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
+	gopkg.in/Regis24GmbH/go-diacritics.v2 v2.0.3 // indirect
 )
