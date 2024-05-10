@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/mdns v1.0.5
 	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/povilasv/prommod v0.0.12
-	github.com/prometheus/client_golang v1.18.0
+	github.com/prometheus/client_golang v1.19.1
 	github.com/rs/zerolog v1.32.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.47.0
 	go.opentelemetry.io/otel v1.24.0
@@ -31,25 +31,24 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/miekg/dns v1.1.56 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.45.0 // indirect
+	github.com/prometheus/common v0.48.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/tadglines/go-pkgs v0.0.0-20210623144937-b983b20f54f9 // indirect
 	github.com/xiam/to v0.0.0-20200126224905-d60d31e03561 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.22.0 // indirect
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
+	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/mod v0.14.0 // indirect
-	golang.org/x/net v0.18.0 // indirect
+	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/sys v0.17.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/grpc v1.60.1 // indirect
-	google.golang.org/protobuf v1.32.0 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/Regis24GmbH/go-diacritics.v2 v2.0.3 // indirect
 )
